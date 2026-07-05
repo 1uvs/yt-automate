@@ -124,5 +124,7 @@ def media(fn):
 
 
 if __name__ == "__main__":
-    print("\n  clip-factory UI → http://localhost:5000\n")
-    app.run(port=5000, debug=False)
+    # Port 5000 is taken by macOS AirPlay Receiver, so use 5050.
+    PORT = 5050
+    print(f"\n  clip-factory UI → http://localhost:{PORT}\n")
+    app.run(host="127.0.0.1", port=PORT, debug=False)

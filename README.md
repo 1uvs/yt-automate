@@ -49,7 +49,7 @@ cp .env.example .env
 
 ```bash
 source .venv/bin/activate
-python app.py        # then open http://localhost:5000
+python app.py        # then open http://localhost:5050
 ```
 
 From the browser you can:
