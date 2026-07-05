@@ -19,7 +19,8 @@ def save_meta(cid: str, meta: dict) -> None:
     (OUTPUT_DIR / f"{cid}.json").write_text(json.dumps(meta, indent=2))
 
 
-def publish_clip(cid: str, cfg: dict) -> tuple[bool, str]:
+def publish_clip(cid: str, cfg: dict, publish_at: str | None = None) -> tuple[bool, str]:
+    """Publish now (publish_at=None) or schedule for a future ISO time."""
     r = state.get(cid)
     if not r or r["status"] != "pending":
         return False, "clip is not pending"
@@ -36,9 +37,14 @@ def publish_clip(cid: str, cfg: dict) -> tuple[bool, str]:
             category_id=str(p["category_id"]),
             made_for_kids=p["made_for_kids"],
             thumbnail=thumb if thumb.exists() else None,
+            publish_at=publish_at,
         )
-        state.upsert(cid, status="published", youtube_id=vid,
-                     published_at=datetime.now(timezone.utc).strftime("%Y-%m-%d"))
+        if publish_at:
+            state.upsert(cid, status="scheduled", youtube_id=vid, scheduled_at=publish_at,
+                         published_at=publish_at[:10])
+        else:
+            state.upsert(cid, status="published", youtube_id=vid,
+                         published_at=datetime.now(timezone.utc).strftime("%Y-%m-%d"))
         return True, vid
     except Exception as e:
         state.upsert(cid, status="pending", error=str(e))

@@ -28,6 +28,7 @@ _MIGRATIONS = [
     ("variant", "TEXT"),
     ("published_at", "TEXT"),
     ("length_sec", "REAL"),
+    ("scheduled_at", "TEXT"),
 ]
 
 

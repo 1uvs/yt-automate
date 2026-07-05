@@ -17,6 +17,7 @@ from clipfactory import state, youtube
 from clipfactory.config import OUTPUT_DIR, load_config
 from clipfactory.pipeline import run as pipeline_run
 from clipfactory.publish import load_meta, publish_clip, save_meta
+from clipfactory.schedule import human, next_slots, to_publish_at
 
 app = Flask(__name__)
 
@@ -57,12 +58,14 @@ def index():
     for r in pending:
         r["meta"] = load_meta(r["clip_id"])
     published = [dict(r) for r in state.by_status("published")]
+    scheduled = [dict(r) for r in state.by_status("scheduled")]
     return render_template(
         "index.html",
         channel=channel,
         has_secret=youtube.has_client_secret(),
         pending=pending,
         published=published,
+        scheduled=scheduled,
         cfg=load_config(),
     )
 
@@ -99,6 +102,16 @@ def approve(cid):
     ok, info = publish_clip(cid, load_config())
     url = f"https://youtube.com/watch?v={info}" if ok else ""
     return jsonify(ok=ok, url=url, msg=info)
+
+
+@app.route("/schedule/<cid>", methods=["POST"])
+def schedule_one(cid):
+    cfg = load_config()
+    # next free slot = one past however many are already scheduled
+    already = len(state.by_status("scheduled"))
+    slot = next_slots(already + 1, cfg)[-1]
+    ok, info = publish_clip(cid, cfg, publish_at=to_publish_at(slot))
+    return jsonify(ok=ok, when=human(slot), msg=info)
 
 
 @app.route("/reject/<cid>", methods=["POST"])

@@ -62,6 +62,7 @@ def _length_bucket(sec) -> str:
 
 def published_with_stats() -> list[dict]:
     pub = [dict(r) for r in state.by_status("published") if r["youtube_id"]]
+    pub += [dict(r) for r in state.by_status("scheduled") if r["youtube_id"]]
     stats = fetch_video_stats([p["youtube_id"] for p in pub])
     rows = []
     for p in pub:

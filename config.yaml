@@ -53,6 +53,16 @@ ab_test:
     - name: blur             # blurred bars
       layout: blur_pad
 
+# Scheduled posting — approved clips upload as private and auto-go-public at these
+# local times, dripped one per slot so you never dump them all at once.
+schedule:
+  timezone: auto             # auto = your Mac's local time, or e.g. "America/New_York"
+  slots:                     # peak engagement windows (24h local time)
+    - "12:00"
+    - "15:00"
+    - "18:00"
+    - "21:00"
+
 # Publishing
 publish:
   privacy_on_approve: public # public | unlisted | private  (what an approved clip becomes)

@@ -57,8 +57,13 @@ From the browser you can:
    channel name + sub count once linked.
 2. **⚡ Generate clips** — runs the whole pipeline with a live log; new clips appear
    in the review queue with an auto-made **thumbnail**, title, and description.
-3. **Review** — watch each clip, tweak the title/description inline, then **Publish ▶**
-   (or Reject). Publishing pushes the video *and* its thumbnail to your channel.
+3. **Review** — watch each clip, tweak the title/description inline, then either
+   **Publish now ▶**, or **⏰ Schedule** it to auto-post at the next peak time. Use
+   **⏰ Schedule all at peak times** to drip your whole queue across the best hours.
+
+Scheduled clips upload as *private* and YouTube flips them public automatically at
+the posting time (set the slots + timezone under `schedule:` in `config.yaml`).
+They appear in an **⏰ Scheduled** section with their go-live time.
 
 Everything (streamers, thresholds, layout, caption style, privacy) is tuned in
 `config.yaml`.
