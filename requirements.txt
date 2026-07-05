@@ -1,0 +1,16 @@
+# Core
+requests>=2.31
+PyYAML>=6.0
+python-dotenv>=1.0
+
+# Captions (word-level transcription + PNG overlay rendering)
+faster-whisper>=1.0
+Pillow>=10.0
+
+# YouTube upload
+google-api-python-client>=2.100
+google-auth-oauthlib>=1.2
+google-auth-httplib2>=0.2
+
+# Optional: LLM-generated titles/descriptions/hashtags (falls back to templates if absent)
+anthropic>=0.40

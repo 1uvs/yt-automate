@@ -1,0 +1,35 @@
+# Which streamers to pull clips from (Twitch usernames / login names).
+# IShowSpeed streams mainly on YouTube/Kick, so he is not pullable via the Twitch
+# Clips API — add him later via a VOD-based source if you want him.
+streamers:
+  - kaicenat
+  - jasontheween
+  - ksi
+  - duke
+  - agent00
+  - fanum
+
+# How far back to look for top clips, and how many per streamer per run.
+lookback_hours: 24
+clips_per_streamer: 3
+min_view_count: 500          # skip clips below this many views
+min_duration_sec: 8          # too short = no story
+max_duration_sec: 75         # YouTube Shorts hard limit is 60s of final render; source can be longer
+
+# Rendering
+render:
+  layout: blur_pad           # blur_pad | center_crop  (blur_pad keeps the whole frame)
+  target_w: 1080
+  target_h: 1920
+  max_final_sec: 58          # trim final vertical clip to stay in Shorts territory
+  caption_style: karaoke     # karaoke = word-by-word highlight (the "viral" look)
+
+# Publishing
+publish:
+  privacy_on_approve: public # public | unlisted | private  (what an approved clip becomes)
+  category_id: "24"          # 24 = Entertainment
+  made_for_kids: false
+  tags_extra:
+    - shorts
+    - clips
+    - viral
