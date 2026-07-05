@@ -15,11 +15,19 @@ CREATE TABLE IF NOT EXISTS clips (
     status       TEXT,               -- discovered|rendered|pending|published|rejected|failed
     output_path  TEXT,
     youtube_id   TEXT,
+    variant      TEXT,               -- A/B variant name (e.g. crop|blur)
+    published_at TEXT,               -- when it went live (for analytics windows)
     error        TEXT,
     created_at   TEXT DEFAULT (datetime('now')),
     updated_at   TEXT DEFAULT (datetime('now'))
 );
 """
+
+# Columns added after the first release — applied to existing DBs on connect.
+_MIGRATIONS = [
+    ("variant", "TEXT"),
+    ("published_at", "TEXT"),
+]
 
 
 def _conn() -> sqlite3.Connection:
@@ -27,6 +35,10 @@ def _conn() -> sqlite3.Connection:
     c = sqlite3.connect(DB_PATH)
     c.row_factory = sqlite3.Row
     c.execute(SCHEMA)
+    cols = {r["name"] for r in c.execute("PRAGMA table_info(clips)")}
+    for name, coltype in _MIGRATIONS:
+        if name not in cols:
+            c.execute(f"ALTER TABLE clips ADD COLUMN {name} {coltype}")
     return c
 
 

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime, timezone
 from pathlib import Path
 
 from . import state
@@ -36,7 +37,8 @@ def publish_clip(cid: str, cfg: dict) -> tuple[bool, str]:
             made_for_kids=p["made_for_kids"],
             thumbnail=thumb if thumb.exists() else None,
         )
-        state.upsert(cid, status="published", youtube_id=vid)
+        state.upsert(cid, status="published", youtube_id=vid,
+                     published_at=datetime.now(timezone.utc).strftime("%Y-%m-%d"))
         return True, vid
     except Exception as e:
         state.upsert(cid, status="pending", error=str(e))

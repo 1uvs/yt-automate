@@ -58,11 +58,13 @@ def _gather_youtube(cfg: dict, only: list[str] | None) -> list[dict]:
     return cands
 
 
-def _process(cand: dict, cfg: dict) -> None:
+def _process(cand: dict, cfg: dict, variant: dict | None = None) -> None:
     cid, streamer = cand["id"], cand["streamer"]
     state.upsert(cid, streamer=streamer, title=cand["title"],
-                 view_count=cand["view_count"], status="discovered")
+                 view_count=cand["view_count"], status="discovered",
+                 variant=(variant or {}).get("name"))
     r = cfg["render"]
+    layout = (variant or {}).get("layout", r["layout"])
 
     tag = f"{cand['view_count']} views" if cand["kind"] == "twitch" else "loudness peak"
     print(f"  ↓ {streamer}: '{cand['title'][:50]}' ({tag})")
@@ -77,7 +79,7 @@ def _process(cand: dict, cfg: dict) -> None:
         src, OUTPUT_DIR / f"{cid}_caps", res=(r["target_w"], r["target_h"])
     )
     out = OUTPUT_DIR / f"{cid}.mp4"
-    render_vertical(src, out, specs, layout=r["layout"],
+    render_vertical(src, out, specs, layout=layout,
                     w=r["target_w"], h=r["target_h"], max_sec=r["max_final_sec"])
 
     meta = generate_metadata(streamer, cand["title"], transcript,
@@ -97,9 +99,17 @@ def _process(cand: dict, cfg: dict) -> None:
     print(f"    ✓ rendered -> {out.name}  |  \"{meta['title']}\"")
 
 
-def _safe_process(cand: dict, cfg: dict) -> None:
+def _variant_for(cfg: dict, index: int) -> dict | None:
+    ab = cfg.get("ab_test") or {}
+    if not ab.get("enabled") or not ab.get("variants"):
+        return None
+    variants = ab["variants"]
+    return variants[index % len(variants)]
+
+
+def _safe_process(cand: dict, cfg: dict, variant: dict | None) -> None:
     try:
-        _process(cand, cfg)
+        _process(cand, cfg, variant)
     except Exception as e:
         state.upsert(cand["id"], streamer=cand["streamer"], status="failed", error=str(e))
         print(f"    x failed {cand['id']}: {e}")
@@ -108,14 +118,17 @@ def _safe_process(cand: dict, cfg: dict) -> None:
 
 def run(limit_streamers: list[str] | None = None) -> None:
     cfg = load_config()
+    n = 0  # global counter so A/B variants alternate evenly across the whole run
 
     # Twitch first — these are fast, so clips show up in the queue right away.
     print("🔎 Checking Twitch clips…")
     tw = _gather_twitch(cfg, limit_streamers)
     print(f"   found {len(tw)} new Twitch clip(s).\n")
     for i, cand in enumerate(tw, 1):
-        print(f"[{i}/{len(tw)}] {cand['streamer']}")
-        _safe_process(cand, cfg)
+        v = _variant_for(cfg, n); n += 1
+        tag = f" [{v['name']}]" if v else ""
+        print(f"[{i}/{len(tw)}] {cand['streamer']}{tag}")
+        _safe_process(cand, cfg, v)
 
     # YouTube (IShowSpeed) — downloads a full video, so it's slower.
     yt_cfg = cfg.get("youtube_streamers") or []
@@ -125,8 +138,10 @@ def run(limit_streamers: list[str] | None = None) -> None:
         yt = _gather_youtube(cfg, limit_streamers)
         print(f"   found {len(yt)} new YouTube clip(s).\n")
         for i, cand in enumerate(yt, 1):
-            print(f"[{i}/{len(yt)}] {cand['streamer']}")
-            _safe_process(cand, cfg)
+            v = _variant_for(cfg, n); n += 1
+            tag = f" [{v['name']}]" if v else ""
+            print(f"[{i}/{len(yt)}] {cand['streamer']}{tag}")
+            _safe_process(cand, cfg, v)
 
     pend = len(state.by_status("pending"))
     print(f"\n✅ Done. {pend} clip(s) waiting in the review queue.")

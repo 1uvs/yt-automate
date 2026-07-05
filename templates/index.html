@@ -38,6 +38,14 @@
   .row { display:flex; gap:8px; }
   .row .btn { flex:1; }
   .empty { color:var(--dim); padding:30px; text-align:center; border:1px dashed var(--line); border-radius:12px; }
+  .statsbox { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px; color:var(--dim); font-size:14px; }
+  .lead { display:flex; gap:12px; flex-wrap:wrap; margin-bottom:12px; }
+  .vcard { background:#11131a; border:1px solid var(--line); border-radius:10px; padding:12px 16px; min-width:150px; }
+  .vcard.win { border-color:var(--ok); }
+  .vcard .vname { font-size:16px; font-weight:700; color:var(--txt); text-transform:uppercase; }
+  .vcard .vnum { color:var(--txt); } .vcard .vsub { font-size:12px; color:var(--dim); }
+  .statsbox table { width:100%; border-collapse:collapse; font-size:13px; color:var(--txt); }
+  .statsbox td, .statsbox th { text-align:left; padding:4px 8px; border-bottom:1px solid var(--line); }
   a.link { color:var(--accent); text-decoration:none; }
 </style>
 </head>
@@ -65,6 +73,11 @@
 
   <pre id="log"></pre>
 
+  <div class="sec">📊 Virality A/B — which format wins
+    <button class="btn ghost" style="padding:4px 10px;font-size:12px;margin-left:8px" onclick="loadStats()">Refresh from YouTube</button>
+  </div>
+  <div id="stats" class="statsbox">Publish clips in both formats, then click <b>Refresh</b> to see which one gets more views &amp; watch-time on your channel. (YouTube data lags 1–3 days.)</div>
+
   <div class="sec">Review queue — {{ pending|length }} pending</div>
   {% if pending %}
   <div class="grid">
@@ -78,7 +91,7 @@
         <span class="hint">▶ hover to preview captions</span>
       </div>
       <div class="body">
-        <div class="who">{{ c.streamer }}{% if c.view_count %} · {{ c.view_count }} views{% endif %}</div>
+        <div class="who">{{ c.streamer }}{% if c.view_count %} · {{ c.view_count }} views{% endif %}{% if c.variant %} · <b style="color:var(--accent)">{{ c.variant }}</b>{% endif %}</div>
         <img class="thumb" src="/media/{{ c.clip_id }}_thumb.jpg" onerror="this.style.display='none'" title="auto-generated thumbnail">
         <input value="{{ c.meta.title|default(c.title) }}" onchange="save('{{ c.clip_id }}')" id="title-{{ c.clip_id }}">
         <textarea onchange="save('{{ c.clip_id }}')" id="desc-{{ c.clip_id }}">{{ c.meta.description|default('') }}</textarea>
@@ -137,6 +150,20 @@ async function approve(id){
 }
 async function reject(id){
   await fetch('/reject/'+id,{method:'POST'}); document.getElementById('card-'+id).remove();
+}
+async function loadStats(){
+  const box=document.getElementById('stats'); box.innerHTML='Loading your YouTube analytics…';
+  const r=await fetch('/stats'); const j=await r.json();
+  if(!j.ok){ box.innerHTML='⚠️ '+(j.msg||'could not load stats')+'<br><small>Enable the YouTube Analytics API and re-connect your channel (delete token.json).</small>'; return; }
+  if(!j.per.length){ box.innerHTML='No published clips yet — publish some in both formats, then check back in a day or two.'; return; }
+  let h='<div class="lead">';
+  j.board.forEach((b,i)=>{ h+=`<div class="vcard ${i==0?'win':''}"><div class="vname">${i==0?'👑 ':''}${b.variant}</div>`+
+    `<div class="vnum">${b.avg_views} avg views</div><div class="vnum">${b.avg_retention}% retention</div>`+
+    `<div class="vsub">${b.clips} clip(s)</div></div>`; });
+  h+='</div><table><tr><th>Format</th><th>Views</th><th>Retention</th><th>Title</th></tr>';
+  j.per.forEach(p=>{ h+=`<tr><td><b style="color:var(--accent)">${p.variant}</b></td><td>${p.views}</td><td>${p.retention}%</td><td>${p.title}</td></tr>`; });
+  h+='</table>';
+  box.innerHTML=h;
 }
 // resume polling if a run is already in progress on load
 fetch('/status').then(r=>r.json()).then(s=>{ if(s.running){ document.getElementById('log').classList.add('show'); poll(); }});

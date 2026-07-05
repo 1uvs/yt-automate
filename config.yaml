@@ -37,11 +37,21 @@ max_duration_sec: 75         # YouTube Shorts hard limit is 60s of final render;
 
 # Rendering
 render:
-  layout: blur_pad           # blur_pad | center_crop  (blur_pad keeps the whole frame)
+  layout: center_crop        # center_crop = full-screen (recommended) | blur_pad = blurred bars
   target_w: 1080
   target_h: 1920
   max_final_sec: 58          # trim final vertical clip to stay in Shorts territory
   caption_style: karaoke     # karaoke = word-by-word highlight (the "viral" look)
+
+# A/B virality testing: rotate variants across clips, then use YouTube Analytics to
+# learn which performs best on YOUR channel. Set enabled: false to always use render.layout.
+ab_test:
+  enabled: true
+  variants:
+    - name: crop             # full-screen
+      layout: center_crop
+    - name: blur             # blurred bars
+      layout: blur_pad
 
 # Publishing
 publish:

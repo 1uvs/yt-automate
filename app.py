@@ -118,6 +118,16 @@ def update(cid):
     return jsonify(ok=True)
 
 
+@app.route("/stats")
+def stats():
+    from clipfactory.analytics import variant_leaderboard
+    try:
+        board, per = variant_leaderboard()
+        return jsonify(ok=True, board=board, per=per)
+    except Exception as e:
+        return jsonify(ok=False, msg=str(e))
+
+
 @app.route("/media/<path:fn>")
 def media(fn):
     return send_from_directory(OUTPUT_DIR, fn)

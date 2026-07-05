@@ -8,6 +8,7 @@ from .config import ROOT
 SCOPES = [
     "https://www.googleapis.com/auth/youtube.upload",
     "https://www.googleapis.com/auth/youtube.readonly",
+    "https://www.googleapis.com/auth/yt-analytics.readonly",
 ]
 CLIENT_SECRET = ROOT / "client_secret.json"
 TOKEN = ROOT / "token.json"
@@ -21,11 +22,10 @@ def has_client_secret() -> bool:
     return CLIENT_SECRET.exists()
 
 
-def _service():
+def _credentials():
     from google.auth.transport.requests import Request
     from google.oauth2.credentials import Credentials
     from google_auth_oauthlib.flow import InstalledAppFlow
-    from googleapiclient.discovery import build
 
     creds = None
     if TOKEN.exists():
@@ -41,7 +41,17 @@ def _service():
             flow = InstalledAppFlow.from_client_secrets_file(str(CLIENT_SECRET), SCOPES)
             creds = flow.run_local_server(port=0)
         TOKEN.write_text(creds.to_json())
-    return build("youtube", "v3", credentials=creds)
+    return creds
+
+
+def _service():
+    from googleapiclient.discovery import build
+    return build("youtube", "v3", credentials=_credentials())
+
+
+def analytics_service():
+    from googleapiclient.discovery import build
+    return build("youtubeAnalytics", "v2", credentials=_credentials())
 
 
 def connect() -> dict:
