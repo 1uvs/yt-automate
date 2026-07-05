@@ -120,10 +120,9 @@ def update(cid):
 
 @app.route("/stats")
 def stats():
-    from clipfactory.analytics import variant_leaderboard
+    from clipfactory.analytics import insights
     try:
-        board, per = variant_leaderboard()
-        return jsonify(ok=True, board=board, per=per)
+        return jsonify(ok=True, data=insights())
     except Exception as e:
         return jsonify(ok=False, msg=str(e))
 

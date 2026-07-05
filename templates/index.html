@@ -46,6 +46,14 @@
   .vcard .vnum { color:var(--txt); } .vcard .vsub { font-size:12px; color:var(--dim); }
   .statsbox table { width:100%; border-collapse:collapse; font-size:13px; color:var(--txt); }
   .statsbox td, .statsbox th { text-align:left; padding:4px 8px; border-bottom:1px solid var(--line); }
+  .statsbox th { color:var(--dim); font-weight:500; }
+  .coach { background:#12211a; border:1px solid #1f5138; border-radius:10px; padding:12px 16px; margin-bottom:14px; }
+  .coach ul { margin:6px 0 0; padding-left:18px; color:var(--txt); } .coach li { margin:3px 0; }
+  .rankttl { font-size:13px; font-weight:700; color:var(--txt); margin-bottom:6px; text-transform:uppercase; letter-spacing:.5px; }
+  .statline { color:var(--txt); margin-bottom:12px; }
+  .ranks { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:16px; }
+  .rankblk { background:#11131a; border:1px solid var(--line); border-radius:10px; padding:12px; }
+  .tagpill { display:inline-block; background:#11131a; border:1px solid var(--line); border-radius:16px; padding:5px 11px; margin:4px 4px 0 0; font-size:12px; color:var(--txt); }
   a.link { color:var(--accent); text-decoration:none; }
 </style>
 </head>
@@ -151,18 +159,34 @@ async function approve(id){
 async function reject(id){
   await fetch('/reject/'+id,{method:'POST'}); document.getElementById('card-'+id).remove();
 }
+function rankTable(title, rows){
+  if(!rows||!rows.length) return '';
+  let h=`<div class="rankblk"><div class="rankttl">${title}</div><table>`+
+        '<tr><th></th><th>subs/clip</th><th>avg views</th><th>retention</th><th>clips</th></tr>';
+  rows.forEach((b,i)=>{ h+=`<tr><td><b style="color:${i==0?'var(--ok)':'var(--accent)'}">${i==0?'👑 ':''}${b.name}</b></td>`+
+    `<td>${b.subs_per_clip}</td><td>${b.avg_views}</td><td>${b.avg_retention}%</td><td>${b.clips}</td></tr>`; });
+  return h+'</table></div>';
+}
 async function loadStats(){
   const box=document.getElementById('stats'); box.innerHTML='Loading your YouTube analytics…';
   const r=await fetch('/stats'); const j=await r.json();
-  if(!j.ok){ box.innerHTML='⚠️ '+(j.msg||'could not load stats')+'<br><small>Enable the YouTube Analytics API and re-connect your channel (delete token.json).</small>'; return; }
-  if(!j.per.length){ box.innerHTML='No published clips yet — publish some in both formats, then check back in a day or two.'; return; }
-  let h='<div class="lead">';
-  j.board.forEach((b,i)=>{ h+=`<div class="vcard ${i==0?'win':''}"><div class="vname">${i==0?'👑 ':''}${b.variant}</div>`+
-    `<div class="vnum">${b.avg_views} avg views</div><div class="vnum">${b.avg_retention}% retention</div>`+
-    `<div class="vsub">${b.clips} clip(s)</div></div>`; });
-  h+='</div><table><tr><th>Format</th><th>Views</th><th>Retention</th><th>Title</th></tr>';
-  j.per.forEach(p=>{ h+=`<tr><td><b style="color:var(--accent)">${p.variant}</b></td><td>${p.views}</td><td>${p.retention}%</td><td>${p.title}</td></tr>`; });
-  h+='</table>';
+  if(!j.ok){ box.innerHTML='⚠️ '+(j.msg||'could not load stats')+'<br><small>Enable the <b>YouTube Analytics API</b> in Google Cloud and re-connect your channel.</small>'; return; }
+  const d=j.data;
+  let h='';
+  if(d.recommendations&&d.recommendations.length){
+    h+='<div class="coach"><div class="rankttl">🧠 Coach says</div><ul>';
+    d.recommendations.forEach(x=>h+=`<li>${x}</li>`); h+='</ul></div>';
+  }
+  h+=`<div class="statline">${d.clips} published clip(s) · <b style="color:var(--ok)">${d.total_subs}</b> subscribers gained</div>`;
+  h+='<div class="ranks">';
+  h+=rankTable('By format', d.by_format);
+  h+=rankTable('By streamer', d.by_streamer);
+  h+=rankTable('By length', d.by_length);
+  h+='</div>';
+  if(d.by_hashtag&&d.by_hashtag.length){
+    h+='<div class="rankttl" style="margin-top:12px">Best hashtags (auto-boosted on new clips)</div><div>';
+    d.by_hashtag.slice(0,8).forEach(t=>h+=`<span class="tagpill">#${t.tag} · ${t.subs_per_clip} subs</span>`); h+='</div>';
+  }
   box.innerHTML=h;
 }
 // resume polling if a run is already in progress on load

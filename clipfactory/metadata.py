@@ -9,6 +9,7 @@ import json
 import re
 
 from .config import env
+from .hashtags import build_hashtags, hashtag_line
 
 MODEL = "claude-haiku-4-5-20251001"
 
@@ -55,7 +56,8 @@ def _hashtags(tags: list[str], streamer: str) -> str:
 
 
 def generate_metadata(streamer: str, clip_title: str, transcript: str = "",
-                      tags_extra: list[str] | None = None) -> dict:
+                      tags_extra: list[str] | None = None,
+                      hashtag_boost: list[str] | None = None) -> dict:
     tags_extra = tags_extra or []
     data = None
     if env("ANTHROPIC_API_KEY"):
@@ -86,12 +88,15 @@ def generate_metadata(streamer: str, clip_title: str, transcript: str = "",
         data = _fallback(streamer, clip_title)
 
     tags = list(dict.fromkeys([*(data.get("tags") or []), *tags_extra]))
+    # focused, strategy-driven hashtags (with any learned winners boosted first)
+    hashtags = build_hashtags(streamer, clip_title, transcript, boost=hashtag_boost)
     desc = data.get("description", "").rstrip()
-    desc += "\n\n" + _hashtags(tags, streamer)
+    desc += "\n\n" + hashtag_line(hashtags)
     hook = (data.get("hook") or data["title"]).upper()[:22]
     return {
         "title": data["title"][:100],
         "description": desc,
         "tags": tags[:15],
+        "hashtags": hashtags,
         "hook": hook,
     }

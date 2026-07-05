@@ -27,6 +27,7 @@ CREATE TABLE IF NOT EXISTS clips (
 _MIGRATIONS = [
     ("variant", "TEXT"),
     ("published_at", "TEXT"),
+    ("length_sec", "REAL"),
 ]
 
 

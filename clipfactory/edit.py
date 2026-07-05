@@ -9,6 +9,18 @@ import subprocess
 from pathlib import Path
 
 
+def probe_duration(path) -> float:
+    proc = subprocess.run(
+        ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+         "-of", "csv=p=0", str(path)],
+        capture_output=True, text=True,
+    )
+    try:
+        return round(float(proc.stdout.strip()), 2)
+    except ValueError:
+        return 0.0
+
+
 def _base_chain(layout: str, w: int, h: int) -> str:
     if layout == "center_crop":
         return f"[0:v]scale=-2:{h},crop={w}:{h},setsar=1[base]"

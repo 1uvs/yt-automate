@@ -1,31 +1,42 @@
 #!/usr/bin/env python3
-"""Show which A/B variant is winning on your channel (from real YouTube Analytics).
+"""Your virality coach: what's driving views + subscribers, and what to do next.
 
     python stats.py
 """
-from clipfactory.analytics import variant_leaderboard
+from clipfactory.analytics import insights
+
+
+def _table(title, rows):
+    if not rows:
+        return
+    print(f"\n  {title}")
+    print(f"    {'name':<14}{'subs/clip':>10}{'avg views':>11}{'retention':>11}{'clips':>7}")
+    for i, b in enumerate(rows):
+        crown = "👑" if i == 0 else "  "
+        print(f"  {crown}{b['name']:<14}{b['subs_per_clip']:>10}{b['avg_views']:>11}"
+              f"{str(b['avg_retention'])+'%':>11}{b['clips']:>7}")
+
 
 if __name__ == "__main__":
     try:
-        board, per = variant_leaderboard()
+        d = insights()
     except Exception as e:
         print(f"Could not fetch analytics: {e}")
-        print("Make sure the YouTube Analytics API is enabled and you've re-connected "
-              "your channel (delete token.json, then Connect again).")
+        print("→ Enable the YouTube Analytics API in Google Cloud and re-connect your channel.")
         raise SystemExit(1)
 
-    if not per:
-        print("No published clips yet. Publish a few (in both formats), then check back "
-              "in a day or two — YouTube Analytics needs time to populate.")
-        raise SystemExit(0)
+    print(f"\n📊 {d['clips']} published clip(s) · {d['total_subs']} subscribers gained")
 
-    print("\n🏆 VARIANT LEADERBOARD  (best-performing format on your channel)\n")
-    for i, b in enumerate(board):
-        crown = "👑 " if i == 0 else "   "
-        print(f"  {crown}{b['variant']:>6}: {b['clips']} clip(s) | "
-              f"avg {b['avg_views']} views | {b['avg_retention']}% avg retention")
+    print("\n🧠 COACH:")
+    for rec in d["recommendations"]:
+        print(f"   • {rec}")
 
-    print("\n  Per video:")
-    for p in per:
-        print(f"    [{p['variant']:>6}] {p['views']:>6} views  {p['retention']:>5}%  {p['title'][:44]}")
+    _table("BY FORMAT", d["by_format"])
+    _table("BY STREAMER", d["by_streamer"])
+    _table("BY LENGTH", d["by_length"])
+
+    if d["by_hashtag"]:
+        print("\n  BEST HASHTAGS (auto-boosted on new clips):")
+        for h in d["by_hashtag"][:8]:
+            print(f"    #{h['tag']:<16} {h['subs_per_clip']} subs/clip · {h['avg_views']} avg views")
     print()

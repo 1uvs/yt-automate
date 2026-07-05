@@ -73,6 +73,29 @@ python review.py approve <id> # publish it to YouTube
 python review.py approve-all  # publish everything pending
 ```
 
+## Virality coach (the learning loop)
+
+No tool can *guarantee* virality. What this does is **tilt the odds toward whatever
+already works on your channel**, measured with real data:
+
+- Every clip is tagged with its **format, streamer, length, and hashtags**.
+- After clips publish, the coach pulls **YouTube Analytics** (views, retention, and
+  **subscribers gained**) and ranks each dimension.
+- It then **feeds the winners back into generation**: the best hashtags get boosted,
+  the best-converting streamers get prioritized, and it tells you the best format +
+  length to target.
+
+See it in the web UI (📊 Virality A/B panel → *Refresh from YouTube*) or run:
+
+```bash
+python stats.py
+```
+
+Requires: the **YouTube Analytics API** enabled in Google Cloud, a channel re-connect
+(new analytics permission), and enough published clips (~3+) with a day or two for
+data to populate. Early on it just says "publish more" — because consistency and
+volume are genuinely the biggest levers.
+
 ## Automate (optional)
 
 Run discovery every few hours with cron (clips still wait for your approval):
@@ -97,6 +120,8 @@ copyright risk without human review.
 | Captions (word-level) | `clipfactory/captions.py` | faster-whisper → `.ass` |
 | 9:16 render + burn-in | `clipfactory/edit.py` | ffmpeg |
 | Viral metadata + hook | `clipfactory/metadata.py` | Claude Haiku (optional) |
+| Hashtag strategy | `clipfactory/hashtags.py` | curated + learned boost |
+| Virality coach (learning) | `clipfactory/analytics.py` | YouTube Analytics API |
 | Auto thumbnail | `clipfactory/thumbnail.py` | ffmpeg + Pillow |
 | Publish (+ thumbnail) | `clipfactory/youtube.py` | YouTube Data API v3 |
 | Web UI | `app.py` + `templates/` | Flask |
