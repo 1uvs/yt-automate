@@ -53,6 +53,10 @@ ab_test:
     - name: blur             # blurred bars
       layout: blur_pad
 
+# Fully hands-off mode (autopilot.py): generate + auto-schedule with no review.
+autopilot:
+  max_per_run: 8             # safety cap: never schedule more than this per run
+
 # Scheduled posting — approved clips upload as private and auto-go-public at these
 # local times, dripped one per slot so you never dump them all at once.
 schedule:

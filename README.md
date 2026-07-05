@@ -101,18 +101,42 @@ Requires: the **YouTube Analytics API** enabled in Google Cloud, a channel re-co
 data to populate. Early on it just says "publish more" — because consistency and
 volume are genuinely the biggest levers.
 
-## Automate (optional)
+## Fully hands-off (autopilot)
 
-Run discovery every few hours with cron (clips still wait for your approval):
+`autopilot.py` generates new clips **and** auto-schedules them to peak times with no
+review. A daily cron job runs it:
 
 ```bash
-crontab -e
-# every 4 hours:
-0 */4 * * * cd ~/clip-factory && ./.venv/bin/python run.py >> data/cron.log 2>&1
+crontab -l          # view it
+0 10 * * * cd ~/clip-factory && ./.venv/bin/python autopilot.py >> data/autopilot.log 2>&1
 ```
 
-To go fully hands-off later, point cron at `review.py approve-all` too — but expect
-copyright risk without human review.
+**To pause / stop autopilot:**
+```bash
+crontab -r          # removes the job entirely
+```
+or edit with `crontab -e` and delete the line. Change `0 10` to run at a different
+hour. Cap clips per run with `autopilot.max_per_run` in `config.yaml`.
+
+**macOS gotchas (important):**
+- Your Mac must be **awake** at the scheduled time — cron won't wake a sleeping Mac.
+- If `data/autopilot.log` stays empty after the run time, grant **Full Disk Access**
+  to `/usr/sbin/cron` (System Settings → Privacy & Security → Full Disk Access).
+- OAuth tokens for an **unverified** app expire after ~7 days, so headless posting
+  stops until you open the app and click **Connect** again (or verify the app with
+  Google). Reconnecting weekly is the simplest fix for personal use.
+
+> ⚠️ Fully automatic means clips post with **no human review** — highest copyright
+> risk. Watch the first few days; if a strike lands, run `crontab -r` and go back to
+> reviewing in the UI.
+
+## Discovery-only automation (safer)
+
+Generate into the review queue on a timer, but still approve/schedule by hand:
+
+```bash
+0 */6 * * * cd ~/clip-factory && ./.venv/bin/python run.py >> data/cron.log 2>&1
+```
 
 ## How it works
 
