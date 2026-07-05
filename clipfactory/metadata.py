@@ -23,7 +23,7 @@ def _call_llm(prompt: str) -> str | None:
 
             client = genai.Client(api_key=gkey)
             resp = client.models.generate_content(
-                model=env("GEMINI_MODEL", "gemini-2.0-flash"),
+                model=env("GEMINI_MODEL", "gemini-2.5-flash"),
                 contents=prompt,
                 config={"response_mime_type": "application/json"},
             )
