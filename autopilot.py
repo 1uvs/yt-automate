@@ -23,10 +23,12 @@ def autopilot() -> None:
         return
 
     cfg = load_config()
-    cap = (cfg.get("autopilot") or {}).get("max_per_run", 8)
+    ap = cfg.get("autopilot") or {}
+    cap = ap.get("max_per_run", 8)
+    include_yt = ap.get("include_youtube", False)  # Speed's big VOD download is slow
 
     print("=== AUTOPILOT: generating clips ===")
-    run(max_clips=cap)  # only make about as many as we'll post, so no backlog piles up
+    run(max_clips=cap, skip_youtube=not include_yt)
 
     pending = state.by_status("pending")[:cap]
     if not pending:

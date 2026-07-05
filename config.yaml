@@ -94,6 +94,8 @@ ab_test:
 # Fully hands-off mode (autopilot.py): generate + auto-schedule with no review.
 autopilot:
   max_per_run: 8             # safety cap: never schedule more than this per run
+  include_youtube: false     # IShowSpeed's VOD download is slow (~15 min); keep autopilot
+                             # fast + reliable with Twitch only. Use manual Generate for Speed.
 
 # Scheduled posting — approved clips upload as private and auto-go-public at these
 # local times, dripped one per slot so you never dump them all at once.

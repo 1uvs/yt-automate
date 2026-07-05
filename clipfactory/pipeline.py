@@ -151,7 +151,8 @@ def _safe_process(cand: dict, cfg: dict, variant: dict | None,
         traceback.print_exc()
 
 
-def run(limit_streamers: list[str] | None = None, max_clips: int | None = None) -> None:
+def run(limit_streamers: list[str] | None = None, max_clips: int | None = None,
+        skip_youtube: bool = False) -> None:
     cfg = load_config()
     n = 0  # global counter so A/B variants alternate evenly across the whole run
 
@@ -180,9 +181,10 @@ def run(limit_streamers: list[str] | None = None, max_clips: int | None = None) 
         print(f"[{i}/{len(tw)}] {cand['streamer']}{tag}")
         _safe_process(cand, cfg, v, boost, titles)
 
-    # YouTube (IShowSpeed) — downloads a full video, so it's slower.
+    # YouTube (IShowSpeed) — downloads a full video, so it's slower. Skipped in
+    # autopilot by default so daily runs stay fast/reliable.
     yt_cfg = cfg.get("youtube_streamers") or []
-    if yt_cfg and (not limit_streamers or any(e["name"] in limit_streamers for e in yt_cfg)):
+    if not skip_youtube and yt_cfg and (not limit_streamers or any(e["name"] in limit_streamers for e in yt_cfg)):
         print("\n🔎 Checking YouTube sources (IShowSpeed)…")
         print("   ⏳ downloading the latest video — this can take a few minutes, please wait.")
         yt = _gather_youtube(cfg, limit_streamers)

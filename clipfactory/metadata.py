@@ -14,10 +14,14 @@ from .hashtags import build_hashtags, hashtag_line
 ANTHROPIC_MODEL = "claude-haiku-4-5-20251001"
 
 
+_gemini_exhausted = False  # once quota is hit in a run, stop retrying (saves time)
+
+
 def _call_llm(prompt: str) -> str | None:
     """Generate with Gemini if GEMINI_API_KEY is set, else Anthropic. None if neither."""
+    global _gemini_exhausted
     gkey = env("GEMINI_API_KEY") or env("GOOGLE_API_KEY")
-    if gkey:
+    if gkey and not _gemini_exhausted:
         try:
             from google import genai
 
@@ -28,8 +32,10 @@ def _call_llm(prompt: str) -> str | None:
                 config={"response_mime_type": "application/json"},
             )
             return resp.text
-        except Exception:
-            pass
+        except Exception as e:
+            if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e):
+                _gemini_exhausted = True  # out of quota; use templates for the rest
+                print("    (Gemini quota hit — using templates for remaining clips)")
     if env("ANTHROPIC_API_KEY"):
         try:
             import anthropic
