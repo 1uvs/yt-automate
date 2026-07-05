@@ -64,7 +64,8 @@ def _gather_youtube(cfg: dict, only: list[str] | None) -> list[dict]:
 
 
 def _process(cand: dict, cfg: dict, variant: dict | None = None,
-             hashtag_boost: list[str] | None = None) -> None:
+             hashtag_boost: list[str] | None = None,
+             title_examples: list[str] | None = None) -> None:
     cid, streamer = cand["id"], cand["streamer"]
     state.upsert(cid, streamer=streamer, title=cand["title"],
                  view_count=cand["view_count"], status="discovered",
@@ -81,15 +82,22 @@ def _process(cand: dict, cfg: dict, variant: dict | None = None,
         from pathlib import Path
         src = cut_segment(Path(cand["source_path"]), cid, cand["start"], cand["end"])
 
-    specs, transcript = build_caption_overlays(
-        src, OUTPUT_DIR / f"{cid}_caps", res=(r["target_w"], r["target_h"])
-    )
+    cap_cfg = cfg.get("captions") or {}
+    want_caps = cap_cfg.get("enabled", True) and streamer not in (cap_cfg.get("skip_streamers") or [])
+    if want_caps:
+        specs, transcript = build_caption_overlays(
+            src, OUTPUT_DIR / f"{cid}_caps", res=(r["target_w"], r["target_h"])
+        )
+    else:
+        specs, transcript = [], ""
+        print("    (captions off — this streamer burns their own)")
     out = OUTPUT_DIR / f"{cid}.mp4"
     render_vertical(src, out, specs, layout=layout,
                     w=r["target_w"], h=r["target_h"], max_sec=r["max_final_sec"])
 
     meta = generate_metadata(streamer, cand["title"], transcript,
-                             cfg["publish"].get("tags_extra"), hashtag_boost=hashtag_boost)
+                             cfg["publish"].get("tags_extra"), hashtag_boost=hashtag_boost,
+                             title_examples=title_examples)
 
     thumb = OUTPUT_DIR / f"{cid}_thumb.jpg"
     try:
@@ -115,9 +123,10 @@ def _variant_for(cfg: dict, index: int) -> dict | None:
 
 
 def _safe_process(cand: dict, cfg: dict, variant: dict | None,
-                  boost: list[str] | None = None) -> None:
+                  boost: list[str] | None = None,
+                  titles: list[str] | None = None) -> None:
     try:
-        _process(cand, cfg, variant, boost)
+        _process(cand, cfg, variant, boost, titles)
     except Exception as e:
         state.upsert(cand["id"], streamer=cand["streamer"], status="failed", error=str(e))
         print(f"    x failed {cand['id']}: {e}")
@@ -132,6 +141,7 @@ def run(limit_streamers: list[str] | None = None) -> None:
     ins = safe_insights()
     boost = ins["hashtag_boost"] if ins else None
     ranking = ins["streamer_ranking"] if ins else None
+    titles = ins["top_titles"] if ins else None
     if ins and ins["recommendations"]:
         print("🧠 Coach:")
         for rec in ins["recommendations"]:
@@ -146,7 +156,7 @@ def run(limit_streamers: list[str] | None = None) -> None:
         v = _variant_for(cfg, n); n += 1
         tag = f" [{v['name']}]" if v else ""
         print(f"[{i}/{len(tw)}] {cand['streamer']}{tag}")
-        _safe_process(cand, cfg, v, boost)
+        _safe_process(cand, cfg, v, boost, titles)
 
     # YouTube (IShowSpeed) — downloads a full video, so it's slower.
     yt_cfg = cfg.get("youtube_streamers") or []
@@ -159,7 +169,7 @@ def run(limit_streamers: list[str] | None = None) -> None:
             v = _variant_for(cfg, n); n += 1
             tag = f" [{v['name']}]" if v else ""
             print(f"[{i}/{len(yt)}] {cand['streamer']}{tag}")
-            _safe_process(cand, cfg, v, boost)
+            _safe_process(cand, cfg, v, boost, titles)
 
     pend = len(state.by_status("pending"))
     print(f"\n✅ Done. {pend} clip(s) waiting in the review queue.")

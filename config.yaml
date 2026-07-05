@@ -35,6 +35,14 @@ min_view_count: 150          # skip clips below this many views (raise once chan
 min_duration_sec: 8          # too short = no story
 max_duration_sec: 75         # YouTube Shorts hard limit is 60s of final render; source can be longer
 
+# Captions: we add animated word-by-word captions (the viral look). Some streamers
+# already burn their own captions into their stream — list them here so we don't
+# stack two sets of captions on top of each other.
+captions:
+  enabled: true
+  skip_streamers:
+    - jasontheween           # streams with his own burned-in captions
+
 # Rendering
 render:
   layout: center_crop        # center_crop = full-screen (recommended) | blur_pad = blurred bars

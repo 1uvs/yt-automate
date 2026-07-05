@@ -149,6 +149,10 @@ def insights() -> dict:
             tops = ", ".join(f"#{h['tag']}" for h in by_hashtag[:3])
             recs.append(f"Hashtags driving subs: {tops} — now auto-boosted on new clips.")
 
+    # titles of the best performers, so new titles can evolve toward what works
+    top_titles = [r["title"] for r in sorted(
+        rows, key=lambda x: (x["subs"], x["views"]), reverse=True) if r["subs"] > 0][:5]
+
     return {
         "clips": len(rows),
         "total_subs": total_subs,
@@ -161,6 +165,7 @@ def insights() -> dict:
         "hashtag_boost": [h["tag"] for h in by_hashtag[:3]],
         "streamer_ranking": [b["name"] for b in by_streamer if b["subs_per_clip"] > 0],
         "best_format": (by_format[0]["name"] if by_format and by_format[0]["clips"] >= MIN_CLIPS else None),
+        "top_titles": top_titles,
     }
 
 
