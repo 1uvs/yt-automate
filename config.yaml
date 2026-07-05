@@ -12,18 +12,26 @@ streamers:
 youtube_streamers:
   - name: ishowspeed
     channel: https://www.youtube.com/@IShowSpeed
-    scan_videos: 6          # look at this many recent uploads per run
-    max_videos: 2           # analyze the top (most-viewed) N of them
-    highlights_per_video: 3 # clips to cut from each analyzed video
+    scan_videos: 8          # look at this many recent uploads per run
+    max_videos: 1           # analyze the newest qualifying upload (keeps balance)
+    highlights_per_video: 2 # clips to cut from it
     min_video_sec: 90       # ignore uploads shorter than this
-    max_video_sec: 2400     # ...or longer (skip multi-hour full streams by default)
+    max_video_sec: 5400     # ...or longer than 90 min (skip full multi-hour streams)
     clip_len_sec: 30
     max_height: 1080
+    skip_titles:            # skip copyrighted / promo uploads (music videos, trailers)
+      - music video
+      - official video
+      - official audio
+      - "(official"
+      - lyric
+      - teaser
+      - trailer
 
 # How far back to look for top clips, and how many per streamer per run.
-lookback_hours: 24
-clips_per_streamer: 3
-min_view_count: 500          # skip clips below this many views
+lookback_hours: 72           # 3 days — wider net so every streamer has clips to pick from
+clips_per_streamer: 2        # cap per streamer so the queue stays diverse (no one dominates)
+min_view_count: 150          # skip clips below this many views (raise once channels get busy)
 min_duration_sec: 8          # too short = no story
 max_duration_sec: 75         # YouTube Shorts hard limit is 60s of final render; source can be longer
 

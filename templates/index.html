@@ -26,8 +26,11 @@
   .sec { font-size:13px; text-transform:uppercase; letter-spacing:1px; color:var(--dim); margin:28px 0 12px; }
   .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:18px; }
   .card { background:var(--card); border:1px solid var(--line); border-radius:14px; overflow:hidden; display:flex; flex-direction:column; }
-  .card video { width:100%; aspect-ratio:9/16; background:#000; max-height:340px; object-fit:contain; }
-  .thumb { width:100%; aspect-ratio:16/9; object-fit:cover; border-bottom:1px solid var(--line); }
+  .preview { position:relative; background:#000; }
+  .card video.clip { width:100%; aspect-ratio:9/16; background:#000; max-height:420px; object-fit:contain; display:block; }
+  .hint { position:absolute; bottom:8px; left:0; right:0; text-align:center; font-size:11px; color:#fff; text-shadow:0 1px 3px #000; pointer-events:none; opacity:.85; }
+  .preview:hover .hint { opacity:0; }
+  .thumb { width:100%; aspect-ratio:16/9; object-fit:cover; border:1px solid var(--line); border-radius:8px; }
   .card .body { padding:12px; display:flex; flex-direction:column; gap:8px; }
   .card .who { font-size:12px; color:var(--dim); }
   .card input, .card textarea { width:100%; background:#11131a; border:1px solid var(--line); color:var(--txt); border-radius:8px; padding:8px; font:inherit; resize:vertical; }
@@ -67,10 +70,16 @@
   <div class="grid">
     {% for c in pending %}
     <div class="card" id="card-{{ c.clip_id }}">
-      <video controls preload="metadata" src="/media/{{ c.clip_id }}.mp4"></video>
-      <img class="thumb" src="/media/{{ c.clip_id }}_thumb.jpg" onerror="this.style.display='none'">
+      <div class="preview">
+        <video class="clip" controls muted loop playsinline preload="metadata"
+               poster="/media/{{ c.clip_id }}_thumb.jpg"
+               src="/media/{{ c.clip_id }}.mp4"
+               onmouseenter="this.play()" onmouseleave="this.pause()"></video>
+        <span class="hint">▶ hover to preview captions</span>
+      </div>
       <div class="body">
         <div class="who">{{ c.streamer }}{% if c.view_count %} · {{ c.view_count }} views{% endif %}</div>
+        <img class="thumb" src="/media/{{ c.clip_id }}_thumb.jpg" onerror="this.style.display='none'" title="auto-generated thumbnail">
         <input value="{{ c.meta.title|default(c.title) }}" onchange="save('{{ c.clip_id }}')" id="title-{{ c.clip_id }}">
         <textarea onchange="save('{{ c.clip_id }}')" id="desc-{{ c.clip_id }}">{{ c.meta.description|default('') }}</textarea>
         <div class="row">

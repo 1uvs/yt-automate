@@ -60,6 +60,18 @@ def get_candidates(cfg_entry: dict) -> list[dict]:
     name = cfg_entry["name"]
     vids = recent_videos(cfg_entry["channel"], limit=cfg_entry.get("scan_videos", 6))
 
+    # skip music videos / trailers / promo uploads (copyright + not real "moments")
+    skips = [s.lower() for s in cfg_entry.get("skip_titles", [])]
+    if skips:
+        kept = []
+        for v in vids:
+            t = v["title"].lower()
+            if any(s in t for s in skips):
+                print(f"  ⊘ skipping '{v['title'][:50]}' (matched skip filter)")
+            else:
+                kept.append(v)
+        vids = kept
+
     lo = cfg_entry.get("min_video_sec", 120)
     hi = cfg_entry.get("max_video_sec", 1800)
     vids = [v for v in vids if lo <= (v["duration"] or 0) <= hi]
