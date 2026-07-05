@@ -10,7 +10,23 @@ title/desc/hashtags → review queue → publish to YouTube.**
 > Content ID claims or copyright strikes (3 strikes = channel terminated). Stick to
 > clip-friendly streamers, keep it transformative (captions/edits help), and review
 > every clip before it publishes. This ships with a **review queue** on purpose.
-> IShowSpeed is on Kick/YouTube (not Twitch) so he isn't pullable via the Clips API.
+
+## Two kinds of sources
+
+- **Twitch** (`streamers:` in config) — pulls the already-popular community **Clips**
+  via the Helix API. Best signal, lowest effort. Kai Cenat, JasonTheWeen, KSI, AMP…
+- **YouTube VODs** (`youtube_streamers:` in config) — for streamers not on Twitch like
+  **IShowSpeed**. Pulls recent uploads, auto-detects the **loudest / most hype moments**
+  (Speed screams when things go viral → loudness peaks are a strong highlight signal),
+  cuts them, and runs the same caption→render→queue pipeline.
+
+  Notes on the YouTube source:
+  - Speed's channel is mostly produced vlogs/music videos, not raw stream clips. The
+    default `max_video_sec: 2400` skips his multi-hour travel vlogs (they're 1–2 GB
+    downloads). Raise it to mine those too — expect bigger downloads and longer runs.
+  - **Skip music videos** — they contain licensed audio (guaranteed Content ID claim).
+  - He also streams on **Kick**; `yt-dlp` supports Kick URLs, so you can point another
+    `youtube_streamers` entry at a Kick channel/VOD the same way.
 
 ## Setup (one time)
 
@@ -60,8 +76,10 @@ copyright risk without human review.
 
 | Stage | File | Tool |
 |-------|------|------|
-| Discover top clips | `clipfactory/twitch.py` | Twitch Helix API |
-| Download | `clipfactory/download.py` | yt-dlp |
+| Discover top clips (Twitch) | `clipfactory/twitch.py` | Twitch Helix API |
+| Discover clips (YouTube/Kick) | `clipfactory/youtube_source.py` | yt-dlp |
+| Highlight detection | `clipfactory/highlight.py` | ffmpeg + numpy (loudness peaks) |
+| Download / cut segment | `clipfactory/download.py` | yt-dlp / ffmpeg |
 | Captions (word-level) | `clipfactory/captions.py` | faster-whisper → `.ass` |
 | 9:16 render + burn-in | `clipfactory/edit.py` | ffmpeg |
 | Viral metadata | `clipfactory/metadata.py` | Claude Haiku (optional) |

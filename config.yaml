@@ -1,6 +1,4 @@
 # Which streamers to pull clips from (Twitch usernames / login names).
-# IShowSpeed streams mainly on YouTube/Kick, so he is not pullable via the Twitch
-# Clips API — add him later via a VOD-based source if you want him.
 streamers:
   - kaicenat
   - jasontheween
@@ -8,6 +6,19 @@ streamers:
   - duke
   - agent00
   - fanum
+
+# Streamers NOT on Twitch (e.g. IShowSpeed on YouTube). We pull recent uploads,
+# auto-detect the loudest/hype moments, and cut them into clips.
+youtube_streamers:
+  - name: ishowspeed
+    channel: https://www.youtube.com/@IShowSpeed
+    scan_videos: 6          # look at this many recent uploads per run
+    max_videos: 2           # analyze the top (most-viewed) N of them
+    highlights_per_video: 3 # clips to cut from each analyzed video
+    min_video_sec: 90       # ignore uploads shorter than this
+    max_video_sec: 2400     # ...or longer (skip multi-hour full streams by default)
+    clip_len_sec: 30
+    max_height: 1080
 
 # How far back to look for top clips, and how many per streamer per run.
 lookback_hours: 24
