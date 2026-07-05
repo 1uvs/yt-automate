@@ -119,8 +119,10 @@ async function startRun(){
 async function poll(){
   const r=await fetch('/status'); const s=await r.json();
   const pill=document.getElementById('runpill'); const btn=document.getElementById('genbtn');
-  document.getElementById('log').textContent=s.log.join('\n');
-  document.getElementById('log').scrollTop=1e9;
+  const logEl=document.getElementById('log');
+  logEl.textContent = s.log.length ? s.log.join('\n')
+    : '⏳ Starting… fetching clips. Video downloads can take a few minutes — hang tight.';
+  logEl.scrollTop=1e9;
   if(s.running){ pill.style.display='inline'; pill.className='pill live'; pill.textContent='● working…'; btn.disabled=true; setTimeout(poll,1500); }
   else { pill.textContent='done'; pill.className='pill'; btn.disabled=false; setTimeout(()=>location.reload(),800); }
 }

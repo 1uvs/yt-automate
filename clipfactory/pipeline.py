@@ -97,18 +97,36 @@ def _process(cand: dict, cfg: dict) -> None:
     print(f"    ✓ rendered -> {out.name}  |  \"{meta['title']}\"")
 
 
+def _safe_process(cand: dict, cfg: dict) -> None:
+    try:
+        _process(cand, cfg)
+    except Exception as e:
+        state.upsert(cand["id"], streamer=cand["streamer"], status="failed", error=str(e))
+        print(f"    x failed {cand['id']}: {e}")
+        traceback.print_exc()
+
+
 def run(limit_streamers: list[str] | None = None) -> None:
     cfg = load_config()
-    candidates = _gather_twitch(cfg, limit_streamers) + _gather_youtube(cfg, limit_streamers)
-    print(f"{len(candidates)} new candidate clip(s) to process.\n")
 
-    for cand in candidates:
-        try:
-            _process(cand, cfg)
-        except Exception as e:
-            state.upsert(cand["id"], streamer=cand["streamer"], status="failed", error=str(e))
-            print(f"    x failed {cand['id']}: {e}")
-            traceback.print_exc()
+    # Twitch first — these are fast, so clips show up in the queue right away.
+    print("🔎 Checking Twitch clips…")
+    tw = _gather_twitch(cfg, limit_streamers)
+    print(f"   found {len(tw)} new Twitch clip(s).\n")
+    for i, cand in enumerate(tw, 1):
+        print(f"[{i}/{len(tw)}] {cand['streamer']}")
+        _safe_process(cand, cfg)
+
+    # YouTube (IShowSpeed) — downloads a full video, so it's slower.
+    yt_cfg = cfg.get("youtube_streamers") or []
+    if yt_cfg and (not limit_streamers or any(e["name"] in limit_streamers for e in yt_cfg)):
+        print("\n🔎 Checking YouTube sources (IShowSpeed)…")
+        print("   ⏳ downloading the latest video — this can take a few minutes, please wait.")
+        yt = _gather_youtube(cfg, limit_streamers)
+        print(f"   found {len(yt)} new YouTube clip(s).\n")
+        for i, cand in enumerate(yt, 1):
+            print(f"[{i}/{len(yt)}] {cand['streamer']}")
+            _safe_process(cand, cfg)
 
     pend = len(state.by_status("pending"))
-    print(f"\nDone. {pend} clip(s) waiting in the review queue -> `python review.py list`")
+    print(f"\n✅ Done. {pend} clip(s) waiting in the review queue.")
