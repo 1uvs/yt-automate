@@ -11,7 +11,37 @@ import re
 from .config import env
 from .hashtags import build_hashtags, hashtag_line
 
-MODEL = "claude-haiku-4-5-20251001"
+ANTHROPIC_MODEL = "claude-haiku-4-5-20251001"
+
+
+def _call_llm(prompt: str) -> str | None:
+    """Generate with Gemini if GEMINI_API_KEY is set, else Anthropic. None if neither."""
+    gkey = env("GEMINI_API_KEY") or env("GOOGLE_API_KEY")
+    if gkey:
+        try:
+            from google import genai
+
+            client = genai.Client(api_key=gkey)
+            resp = client.models.generate_content(
+                model=env("GEMINI_MODEL", "gemini-2.0-flash"),
+                contents=prompt,
+                config={"response_mime_type": "application/json"},
+            )
+            return resp.text
+        except Exception:
+            pass
+    if env("ANTHROPIC_API_KEY"):
+        try:
+            import anthropic
+
+            msg = anthropic.Anthropic().messages.create(
+                model=ANTHROPIC_MODEL, max_tokens=600,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            return "".join(b.text for b in msg.content if b.type == "text")
+        except Exception:
+            pass
+    return None
 
 _PROMPT = """You are a YouTube Shorts growth expert. Given a clip, write metadata that \
 maximizes click-through and watch-time for a Gen-Z gaming/entertainment audience.
@@ -65,31 +95,21 @@ def generate_metadata(streamer: str, clip_title: str, transcript: str = "",
         joined = "\n".join(f"- {t}" for t in title_examples[:5])
         examples = ("\nYour BEST-PERFORMING past titles (emulate this style — it's what "
                     f"gets subscribers on this channel):\n{joined}\n")
+    prompt = _PROMPT.format(
+        streamer=streamer,
+        clip_title=clip_title or "(none)",
+        transcript=(transcript or "(no speech)")[:1200],
+        examples=examples,
+    )
     data = None
-    if env("ANTHROPIC_API_KEY"):
-        try:
-            import anthropic
-
-            client = anthropic.Anthropic()
-            msg = client.messages.create(
-                model=MODEL,
-                max_tokens=600,
-                messages=[{
-                    "role": "user",
-                    "content": _PROMPT.format(
-                        streamer=streamer,
-                        clip_title=clip_title or "(none)",
-                        transcript=(transcript or "(no speech)")[:1200],
-                        examples=examples,
-                    ),
-                }],
-            )
-            raw = "".join(b.text for b in msg.content if b.type == "text")
-            m = re.search(r"\{.*\}", raw, re.DOTALL)
-            if m:
+    raw = _call_llm(prompt)
+    if raw:
+        m = re.search(r"\{.*\}", raw, re.DOTALL)
+        if m:
+            try:
                 data = json.loads(m.group(0))
-        except Exception:
-            data = None
+            except json.JSONDecodeError:
+                data = None
 
     if not data or "title" not in data:
         data = _fallback(streamer, clip_title)
