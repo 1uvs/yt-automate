@@ -1,11 +1,40 @@
 # Which streamers to pull clips from (Twitch usernames / login names).
+# Big roster of high-clip-volume Twitch streamers (all validated to exist). On any
+# given day some are offline, so a wide roster keeps the variety + volume flowing.
+# The coach learns which convert best and prioritizes them over time.
 streamers:
+  # AMP / big personalities / reaction
   - kaicenat
-  - jasontheween
-  - ksi
-  - duke
   - agent00
+  - dukedennis
   - fanum
+  - jasontheween
+  - chrisnxtdoor
+  - rayasianboy
+  - plaqueboymax
+  - stableronaldo
+  - lacy
+  - silky
+  - yourragegaming
+  # IRL / variety
+  - extraemily
+  - emiru
+  - nmplol
+  - sodapoppin
+  - mizkif
+  - sykkuno
+  # gaming
+  - jynxzi
+  - xqc
+  - caseoh_
+  - clix
+  - tarik
+  - summit1g
+  - ludwig
+  # more high-clip creators
+  - ironmouse
+  - quackity
+  - pokimane
 
 # Streamers NOT on Twitch (e.g. IShowSpeed on YouTube). We pull recent uploads,
 # auto-detect the loudest/hype moments, and cut them into clips.
@@ -29,9 +58,10 @@ youtube_streamers:
       - trailer
 
 # How far back to look for top clips, and how many per streamer per run.
-lookback_hours: 72           # 3 days — wider net so every streamer has clips to pick from
+lookback_hours: 96           # 4 days — wider net so every streamer has clips to pick from
 clips_per_streamer: 2        # cap per streamer so the queue stays diverse (no one dominates)
 min_view_count: 150          # skip clips below this many views (raise once channels get busy)
+max_clips_per_run: 24        # total cap per run (variety-first: 1 from each streamer first)
 min_duration_sec: 8          # too short = no story
 max_duration_sec: 75         # YouTube Shorts hard limit is 60s of final render; source can be longer
 

@@ -23,15 +23,17 @@ def _gather_twitch(cfg: dict, only: list[str] | None,
     if ranking:
         streamers.sort(key=lambda s: ranking.index(s) if s in ranking else 999)
     ids = twitch.resolve_user_ids(streamers)
-    cands: list[dict] = []
+
+    # collect each streamer's eligible clips (best-first) separately
+    per_streamer: dict[str, list[dict]] = {}
     for s in streamers:
         bid = ids.get(s.lower())
         if not bid:
             print(f"  ! could not resolve Twitch user '{s}' (skipping)")
             continue
-        picked = 0
-        for c in twitch.top_clips(bid, cfg["lookback_hours"], first=25):
-            if picked >= cfg["clips_per_streamer"]:
+        picks = []
+        for c in twitch.top_clips(bid, cfg["lookback_hours"], first=40):
+            if len(picks) >= cfg["clips_per_streamer"]:
                 break
             if c.get("view_count", 0) < cfg["min_view_count"]:
                 continue
@@ -40,12 +42,27 @@ def _gather_twitch(cfg: dict, only: list[str] | None,
                 continue
             if state.seen(c["id"]):
                 continue
-            cands.append({
+            picks.append({
                 "id": c["id"], "streamer": s, "title": c.get("title", ""),
                 "view_count": c.get("view_count", 0), "kind": "twitch",
                 "clip_url": c["url"], "origin_url": c["url"],
             })
-            picked += 1
+        if picks:
+            per_streamer[s] = picks
+
+    # round-robin across streamers (everyone's #1 before anyone's #2) for max variety,
+    # capped at max_clips_per_run so runs stay reasonable.
+    cap = cfg.get("max_clips_per_run", 999)
+    cands: list[dict] = []
+    depth = 0
+    while len(cands) < cap and any(len(v) > depth for v in per_streamer.values()):
+        for s in streamers:
+            lst = per_streamer.get(s)
+            if lst and len(lst) > depth:
+                cands.append(lst[depth])
+                if len(cands) >= cap:
+                    break
+        depth += 1
     return cands
 
 
