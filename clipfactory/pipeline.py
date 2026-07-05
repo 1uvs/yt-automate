@@ -15,7 +15,8 @@ from .thumbnail import generate_thumbnail
 
 
 def _gather_twitch(cfg: dict, only: list[str] | None,
-                   ranking: list[str] | None = None) -> list[dict]:
+                   ranking: list[str] | None = None,
+                   max_clips: int | None = None) -> list[dict]:
     streamers = [s for s in cfg.get("streamers", []) if not only or s in only]
     if not streamers:
         return []
@@ -52,7 +53,7 @@ def _gather_twitch(cfg: dict, only: list[str] | None,
 
     # round-robin across streamers (everyone's #1 before anyone's #2) for max variety,
     # capped at max_clips_per_run so runs stay reasonable.
-    cap = cfg.get("max_clips_per_run", 999)
+    cap = max_clips if max_clips is not None else cfg.get("max_clips_per_run", 999)
     cands: list[dict] = []
     depth = 0
     while len(cands) < cap and any(len(v) > depth for v in per_streamer.values()):
@@ -150,9 +151,13 @@ def _safe_process(cand: dict, cfg: dict, variant: dict | None,
         traceback.print_exc()
 
 
-def run(limit_streamers: list[str] | None = None) -> None:
+def run(limit_streamers: list[str] | None = None, max_clips: int | None = None) -> None:
     cfg = load_config()
     n = 0  # global counter so A/B variants alternate evenly across the whole run
+
+    # Mark any scheduled posts whose time has passed as published (keeps slots sane).
+    from .schedule import reconcile_scheduled
+    reconcile_scheduled()
 
     # Learn from past performance (best-effort — needs published clips + analytics).
     ins = safe_insights()
@@ -167,7 +172,7 @@ def run(limit_streamers: list[str] | None = None) -> None:
 
     # Twitch first — these are fast, so clips show up in the queue right away.
     print("🔎 Checking Twitch clips…")
-    tw = _gather_twitch(cfg, limit_streamers, ranking)
+    tw = _gather_twitch(cfg, limit_streamers, ranking, max_clips)
     print(f"   found {len(tw)} new Twitch clip(s).\n")
     for i, cand in enumerate(tw, 1):
         v = _variant_for(cfg, n); n += 1

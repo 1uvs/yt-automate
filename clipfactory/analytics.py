@@ -129,11 +129,15 @@ def insights() -> dict:
     by_hashtag = _rank_hashtags(rows)
 
     recs = []
+    has_signal = total_subs > 0  # don't make claims until subscribers actually move
     if len(rows) < MIN_CLIPS:
         recs.append(f"Publish more clips ({len(rows)}/{MIN_CLIPS}+ needed) — then I can tell "
                     "you what's working. Consistency is the #1 driver of subs.")
+    elif not has_signal:
+        recs.append(f"{len(rows)} clips live but 0 subscribers gained yet — keeping data "
+                    "gathering. Give it more posts + a few days before I recommend changes.")
     else:
-        best_fmt = next((b for b in by_format if b["clips"] >= MIN_CLIPS), None)
+        best_fmt = next((b for b in by_format if b["clips"] >= MIN_CLIPS and b["subs_per_clip"] > 0), None)
         if best_fmt:
             recs.append(f"Format: '{best_fmt['name']}' is winning "
                         f"({best_fmt['subs_per_clip']} subs/clip). Lean into it.")
@@ -142,11 +146,11 @@ def insights() -> dict:
             top = good_streamers[0]
             recs.append(f"Streamer: {top['name']} converts best "
                         f"({top['subs_per_clip']} subs/clip) — post more of them.")
-        best_len = next((b for b in by_length if b["clips"] >= 2), None)
+        best_len = next((b for b in by_length if b["clips"] >= 2 and b["subs_per_clip"] > 0), None)
         if best_len:
             recs.append(f"Length: {best_len['name']} clips perform best — target that.")
-        if by_hashtag:
-            tops = ", ".join(f"#{h['tag']}" for h in by_hashtag[:3])
+        if by_hashtag and any(h["subs_per_clip"] > 0 for h in by_hashtag):
+            tops = ", ".join(f"#{h['tag']}" for h in by_hashtag[:3] if h["subs_per_clip"] > 0)
             recs.append(f"Hashtags driving subs: {tops} — now auto-boosted on new clips.")
 
     # titles of the best performers, so new titles can evolve toward what works
@@ -161,10 +165,11 @@ def insights() -> dict:
         "by_length": by_length,
         "by_hashtag": by_hashtag,
         "recommendations": recs,
-        # fed back into generation:
-        "hashtag_boost": [h["tag"] for h in by_hashtag[:3]],
+        # fed back into generation (only once there's real subscriber signal):
+        "hashtag_boost": [h["tag"] for h in by_hashtag[:3] if h["subs_per_clip"] > 0] if has_signal else [],
         "streamer_ranking": [b["name"] for b in by_streamer if b["subs_per_clip"] > 0],
-        "best_format": (by_format[0]["name"] if by_format and by_format[0]["clips"] >= MIN_CLIPS else None),
+        "best_format": (by_format[0]["name"] if has_signal and by_format
+                        and by_format[0]["subs_per_clip"] > 0 else None),
         "top_titles": top_titles,
     }
 

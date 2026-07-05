@@ -48,6 +48,8 @@ def _do_run(streamers):
 # --- pages ----------------------------------------------------------------
 @app.route("/")
 def index():
+    from clipfactory.schedule import reconcile_scheduled
+    reconcile_scheduled()
     channel = None
     if youtube.is_connected():
         try:

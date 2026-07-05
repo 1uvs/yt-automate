@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from clipfactory import state, youtube
 from clipfactory.config import load_config
+from clipfactory.maintenance import cleanup_disk
 from clipfactory.pipeline import run
 from clipfactory.publish import publish_clip
 from clipfactory.schedule import human, next_slots, to_publish_at
@@ -25,7 +26,7 @@ def autopilot() -> None:
     cap = (cfg.get("autopilot") or {}).get("max_per_run", 8)
 
     print("=== AUTOPILOT: generating clips ===")
-    run()
+    run(max_clips=cap)  # only make about as many as we'll post, so no backlog piles up
 
     pending = state.by_status("pending")[:cap]
     if not pending:
@@ -42,7 +43,9 @@ def autopilot() -> None:
         status = "✓ scheduled" if ok else "✗ failed"
         extra = f" → {human(slot)}" if ok else f" ({info})"
         print(f"  {status} {r['streamer']}: {r['title'][:40]}{extra}")
-    print("=== AUTOPILOT done ===")
+
+    freed = cleanup_disk()
+    print(f"=== AUTOPILOT done (freed {freed} MB) ===")
 
 
 if __name__ == "__main__":

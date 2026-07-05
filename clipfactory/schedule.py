@@ -47,3 +47,26 @@ def to_publish_at(dt: datetime) -> str:
 
 def human(dt: datetime) -> str:
     return dt.strftime("%a %b %d · %-I:%M %p")
+
+
+def reconcile_scheduled() -> int:
+    """Flip clips whose scheduled time has passed from 'scheduled' -> 'published'
+    (YouTube has already made them public). Keeps slot math from drifting and the
+    Scheduled section showing only upcoming posts. Returns how many were flipped.
+    """
+    from . import state
+
+    now = datetime.now(timezone.utc)
+    flipped = 0
+    for r in state.by_status("scheduled"):
+        sa = r["scheduled_at"]
+        if not sa:
+            continue
+        try:
+            dt = datetime.fromisoformat(sa.replace("Z", "+00:00"))
+        except ValueError:
+            continue
+        if dt <= now:
+            state.upsert(r["clip_id"], status="published")
+            flipped += 1
+    return flipped
