@@ -31,7 +31,7 @@ def _font(size: int):
     return ImageFont.load_default()
 
 
-def _group_words(words, max_words=4, max_gap=0.6, max_dur=1.9):
+def _group_words(words, max_words=3, max_gap=0.6, max_dur=1.5):
     lines, cur = [], []
     for w in words:
         if not cur:
@@ -118,17 +118,27 @@ def build_caption_overlays(video_path: Path, work_dir: Path, res=(1080, 1920)):
     font = _font(size)
     work_dir.mkdir(parents=True, exist_ok=True)
 
-    specs = []
+    # Flatten every word into one ordered list so we can guarantee that no two
+    # caption images are ever on screen at the same time (fixes overlapping captions).
     phrases = _group_words(words)
-    counter = 0
+    flat = []
     for phrase in phrases:
         tokens = [w["text"] for w in phrase]
         for i, w in enumerate(phrase):
-            start = w["start"]
-            # keep the phrase on screen continuously until the next word starts
-            end = phrase[i + 1]["start"] if i + 1 < len(phrase) else w["end"] + 0.15
-            png = work_dir / f"cap_{counter:04d}.png"
-            _render_word_png(tokens, i, png, size, font, res, stroke_w)
-            specs.append({"path": png, "start": round(start, 3), "end": round(end, 3)})
-            counter += 1
+            flat.append({"tokens": tokens, "active": i, "start": w["start"], "wend": w["end"]})
+    # Whisper can emit word times slightly out of order; sort so windows stay monotonic.
+    flat.sort(key=lambda x: x["start"])
+
+    specs = []
+    for j, item in enumerate(flat):
+        start = item["start"]
+        # end just before the next word starts (small gap so two captions can never
+        # share even a single frame), and don't linger too long during pauses.
+        next_start = flat[j + 1]["start"] if j + 1 < len(flat) else item["wend"] + 0.3
+        end = min(item["wend"] + 0.4, max(next_start, start)) - 0.03
+        if end <= start:
+            end = start + 0.02
+        png = work_dir / f"cap_{j:04d}.png"
+        _render_word_png(item["tokens"], item["active"], png, size, font, res, stroke_w)
+        specs.append({"path": png, "start": round(start, 3), "end": round(end, 3)})
     return specs, transcript
