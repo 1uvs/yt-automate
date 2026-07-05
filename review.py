@@ -8,19 +8,13 @@ Usage:
     python review.py reject <clip_id>     # drop it
     python review.py approve-all          # publish every pending clip
 """
-import json
 import subprocess
 import sys
-from pathlib import Path
 
 from clipfactory import state
-from clipfactory.config import OUTPUT_DIR, load_config
-from clipfactory.youtube import upload
-
-
-def _meta(cid: str) -> dict:
-    p = OUTPUT_DIR / f"{cid}.json"
-    return json.loads(p.read_text()) if p.exists() else {}
+from clipfactory.config import load_config
+from clipfactory.publish import load_meta as _meta
+from clipfactory.publish import publish_clip
 
 
 def cmd_list():
@@ -45,29 +39,12 @@ def cmd_open(cid: str):
 
 
 def _publish(cid: str, cfg: dict) -> bool:
-    r = state.get(cid)
-    if not r or r["status"] != "pending":
-        print(f"  {cid}: not pending, skipping")
-        return False
-    m = _meta(cid)
-    p = cfg["publish"]
-    try:
-        vid = upload(
-            Path(r["output_path"]),
-            title=m["title"],
-            description=m["description"],
-            tags=m["tags"],
-            privacy=p["privacy_on_approve"],
-            category_id=str(p["category_id"]),
-            made_for_kids=p["made_for_kids"],
-        )
-        state.upsert(cid, status="published", youtube_id=vid)
-        print(f"  ✓ published {cid} -> https://youtube.com/watch?v={vid}")
-        return True
-    except Exception as e:
-        state.upsert(cid, status="pending", error=str(e))
-        print(f"  x failed to publish {cid}: {e}")
-        return False
+    ok, info = publish_clip(cid, cfg)
+    if ok:
+        print(f"  ✓ published {cid} -> https://youtube.com/watch?v={info}")
+    else:
+        print(f"  x {cid}: {info}")
+    return ok
 
 
 def cmd_approve(cid: str):

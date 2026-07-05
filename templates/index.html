@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>clip-factory</title>
+<style>
+  :root { --bg:#0e0f13; --card:#181a21; --line:#262932; --accent:#ff3e6c; --ok:#25c26e; --txt:#e8eaf0; --dim:#8b90a0; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--txt); font:15px/1.5 -apple-system,Segoe UI,Roboto,sans-serif; }
+  header { display:flex; align-items:center; gap:16px; padding:16px 24px; border-bottom:1px solid var(--line); position:sticky; top:0; background:var(--bg); z-index:5; }
+  h1 { font-size:19px; margin:0; letter-spacing:-.5px; }
+  h1 span { color:var(--accent); }
+  .grow { flex:1; }
+  .btn { border:0; border-radius:9px; padding:10px 16px; font-weight:600; font-size:14px; cursor:pointer; color:#fff; background:#2a2d38; }
+  .btn.primary { background:var(--accent); }
+  .btn.ok { background:var(--ok); }
+  .btn.ghost { background:transparent; border:1px solid var(--line); color:var(--dim); }
+  .btn:disabled { opacity:.5; cursor:default; }
+  .pill { padding:6px 12px; border-radius:20px; font-size:13px; background:#20232c; color:var(--dim); }
+  .pill.live { color:var(--ok); }
+  main { padding:24px; max-width:1200px; margin:0 auto; }
+  .banner { background:#2a1c22; border:1px solid #4a2a34; color:#ffb3c4; padding:12px 16px; border-radius:10px; margin-bottom:20px; font-size:14px; }
+  #log { background:#000; border:1px solid var(--line); border-radius:10px; padding:12px 14px; font:12px/1.5 ui-monospace,Menlo,monospace; color:#9fe6b8; height:0; overflow:hidden; transition:height .2s; white-space:pre-wrap; }
+  #log.show { height:150px; overflow:auto; margin-bottom:20px; }
+  .sec { font-size:13px; text-transform:uppercase; letter-spacing:1px; color:var(--dim); margin:28px 0 12px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:18px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:14px; overflow:hidden; display:flex; flex-direction:column; }
+  .card video { width:100%; aspect-ratio:9/16; background:#000; max-height:340px; object-fit:contain; }
+  .thumb { width:100%; aspect-ratio:16/9; object-fit:cover; border-bottom:1px solid var(--line); }
+  .card .body { padding:12px; display:flex; flex-direction:column; gap:8px; }
+  .card .who { font-size:12px; color:var(--dim); }
+  .card input, .card textarea { width:100%; background:#11131a; border:1px solid var(--line); color:var(--txt); border-radius:8px; padding:8px; font:inherit; resize:vertical; }
+  .card textarea { font-size:13px; min-height:60px; }
+  .row { display:flex; gap:8px; }
+  .row .btn { flex:1; }
+  .empty { color:var(--dim); padding:30px; text-align:center; border:1px dashed var(--line); border-radius:12px; }
+  a.link { color:var(--accent); text-decoration:none; }
+</style>
+</head>
+<body>
+<header>
+  <h1>clip<span>factory</span></h1>
+  {% if channel %}
+    <span class="pill live">● {{ channel.title }}{% if channel.subscribers %} · {{ channel.subscribers }} subs{% endif %}</span>
+  {% else %}
+    <a class="btn primary" href="/connect">Connect YouTube channel</a>
+  {% endif %}
+  <div class="grow"></div>
+  <span id="runpill" class="pill" style="display:none"></span>
+  <button id="logbtn" class="btn ghost" onclick="toggleLog()">Log</button>
+  <button id="genbtn" class="btn primary" onclick="startRun()">⚡ Generate clips</button>
+</header>
+
+<main>
+  {% if not has_secret %}
+    <div class="banner">⚠️ <b>client_secret.json</b> not found. Add your Google OAuth desktop credentials to the project folder to publish. See the README.</div>
+  {% endif %}
+  {% if not channel and has_secret %}
+    <div class="banner">Click <b>Connect YouTube channel</b> to link your channel before publishing.</div>
+  {% endif %}
+
+  <pre id="log"></pre>
+
+  <div class="sec">Review queue — {{ pending|length }} pending</div>
+  {% if pending %}
+  <div class="grid">
+    {% for c in pending %}
+    <div class="card" id="card-{{ c.clip_id }}">
+      <video controls preload="metadata" src="/media/{{ c.clip_id }}.mp4"></video>
+      <img class="thumb" src="/media/{{ c.clip_id }}_thumb.jpg" onerror="this.style.display='none'">
+      <div class="body">
+        <div class="who">{{ c.streamer }}{% if c.view_count %} · {{ c.view_count }} views{% endif %}</div>
+        <input value="{{ c.meta.title|default(c.title) }}" onchange="save('{{ c.clip_id }}')" id="title-{{ c.clip_id }}">
+        <textarea onchange="save('{{ c.clip_id }}')" id="desc-{{ c.clip_id }}">{{ c.meta.description|default('') }}</textarea>
+        <div class="row">
+          <button class="btn ok" onclick="approve('{{ c.clip_id }}')">Publish ▶</button>
+          <button class="btn ghost" onclick="reject('{{ c.clip_id }}')">Reject</button>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+    <div class="empty">Nothing pending. Hit <b>⚡ Generate clips</b> to pull fresh ones.</div>
+  {% endif %}
+
+  {% if published %}
+  <div class="sec">Published — {{ published|length }}</div>
+  <div class="grid">
+    {% for c in published %}
+    <div class="card"><div class="body">
+      <div class="who">{{ c.streamer }}</div>
+      <div>{{ c.title }}</div>
+      <a class="link" href="https://youtube.com/watch?v={{ c.youtube_id }}" target="_blank">Watch on YouTube ↗</a>
+    </div></div>
+    {% endfor %}
+  </div>
+  {% endif %}
+</main>
+
+<script>
+function toggleLog(){ document.getElementById('log').classList.toggle('show'); }
+async function startRun(){
+  const btn=document.getElementById('genbtn'); btn.disabled=true;
+  await fetch('/run',{method:'POST'});
+  document.getElementById('log').classList.add('show');
+  poll();
+}
+async function poll(){
+  const r=await fetch('/status'); const s=await r.json();
+  const pill=document.getElementById('runpill'); const btn=document.getElementById('genbtn');
+  document.getElementById('log').textContent=s.log.join('\n');
+  document.getElementById('log').scrollTop=1e9;
+  if(s.running){ pill.style.display='inline'; pill.className='pill live'; pill.textContent='● working…'; btn.disabled=true; setTimeout(poll,1500); }
+  else { pill.textContent='done'; pill.className='pill'; btn.disabled=false; setTimeout(()=>location.reload(),800); }
+}
+async function save(id){
+  await fetch('/update/'+id,{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({title:document.getElementById('title-'+id).value, description:document.getElementById('desc-'+id).value})});
+}
+async function approve(id){
+  const card=document.getElementById('card-'+id); card.style.opacity=.5;
+  const r=await fetch('/approve/'+id,{method:'POST'}); const j=await r.json();
+  if(j.ok){ card.remove(); } else { alert('Publish failed: '+j.msg); card.style.opacity=1; }
+}
+async function reject(id){
+  await fetch('/reject/'+id,{method:'POST'}); document.getElementById('card-'+id).remove();
+}
+// resume polling if a run is already in progress on load
+fetch('/status').then(r=>r.json()).then(s=>{ if(s.running){ document.getElementById('log').classList.add('show'); poll(); }});
+</script>
+</body>
+</html>

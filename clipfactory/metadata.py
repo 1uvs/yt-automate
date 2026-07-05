@@ -23,6 +23,7 @@ Return STRICT JSON with keys:
 - "title": <=70 chars, punchy, curiosity-driven, includes the streamer's name, NO clickbait lies
 - "description": 1-2 lines + a call to subscribe
 - "tags": array of 8-12 lowercase search tags (no # symbol)
+- "hook": 2-4 WORD all-caps thumbnail phrase, max 18 chars, high-emotion (e.g. "HE DID WHAT?!")
 
 JSON only, no prose."""
 
@@ -39,6 +40,7 @@ def _fallback(streamer: str, clip_title: str) -> dict:
         ),
         "tags": [streamer.lower(), "clips", "shorts", "twitch", "funny moments",
                  "viral", "gaming", "reaction"],
+        "hook": (base.split(" WHAT")[0][:18] or "NO WAY").upper(),
     }
 
 
@@ -86,8 +88,10 @@ def generate_metadata(streamer: str, clip_title: str, transcript: str = "",
     tags = list(dict.fromkeys([*(data.get("tags") or []), *tags_extra]))
     desc = data.get("description", "").rstrip()
     desc += "\n\n" + _hashtags(tags, streamer)
+    hook = (data.get("hook") or data["title"]).upper()[:22]
     return {
         "title": data["title"][:100],
         "description": desc,
         "tags": tags[:15],
+        "hook": hook,
     }

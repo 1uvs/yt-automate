@@ -5,9 +5,20 @@ from pathlib import Path
 
 from .config import ROOT
 
-SCOPES = ["https://www.googleapis.com/auth/youtube.upload"]
+SCOPES = [
+    "https://www.googleapis.com/auth/youtube.upload",
+    "https://www.googleapis.com/auth/youtube.readonly",
+]
 CLIENT_SECRET = ROOT / "client_secret.json"
 TOKEN = ROOT / "token.json"
+
+
+def is_connected() -> bool:
+    return TOKEN.exists()
+
+
+def has_client_secret() -> bool:
+    return CLIENT_SECRET.exists()
 
 
 def _service():
@@ -33,6 +44,25 @@ def _service():
     return build("youtube", "v3", credentials=creds)
 
 
+def connect() -> dict:
+    """Trigger OAuth (opens browser on first run) and return the linked channel."""
+    return channel_info()
+
+
+def channel_info() -> dict:
+    """Return {title, id, subscribers} for the authorized channel."""
+    r = _service().channels().list(part="snippet,statistics", mine=True).execute()
+    items = r.get("items") or []
+    if not items:
+        return {"title": "(unknown)", "id": "", "subscribers": ""}
+    it = items[0]
+    return {
+        "title": it["snippet"]["title"],
+        "id": it["id"],
+        "subscribers": it.get("statistics", {}).get("subscriberCount", ""),
+    }
+
+
 def upload(
     video_path: Path,
     title: str,
@@ -42,6 +72,7 @@ def upload(
     category_id: str = "24",
     made_for_kids: bool = False,
     publish_at: str | None = None,  # ISO8601 -> schedules (forces privacy=private)
+    thumbnail: Path | None = None,
 ) -> str:
     from googleapiclient.http import MediaFileUpload
 
@@ -59,10 +90,22 @@ def upload(
         },
         "status": status,
     }
+    svc = _service()
     media = MediaFileUpload(str(video_path), chunksize=-1, resumable=True, mimetype="video/mp4")
-    req = _service().videos().insert(part="snippet,status", body=body, media_body=media)
+    req = svc.videos().insert(part="snippet,status", body=body, media_body=media)
 
     response = None
     while response is None:
         _, response = req.next_chunk()
-    return response["id"]
+    video_id = response["id"]
+
+    if thumbnail and Path(thumbnail).exists():
+        try:
+            svc.thumbnails().set(
+                videoId=video_id,
+                media_body=MediaFileUpload(str(thumbnail), mimetype="image/jpeg"),
+            ).execute()
+        except Exception as e:
+            # custom thumbnails require a verified channel; don't fail the upload
+            print(f"    (thumbnail not set: {e})")
+    return video_id

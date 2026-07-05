@@ -10,6 +10,7 @@ from .config import OUTPUT_DIR, load_config
 from .download import cut_segment, download_clip
 from .edit import render_vertical
 from .metadata import generate_metadata
+from .thumbnail import generate_thumbnail
 
 
 def _gather_twitch(cfg: dict, only: list[str] | None) -> list[dict]:
@@ -81,6 +82,13 @@ def _process(cand: dict, cfg: dict) -> None:
 
     meta = generate_metadata(streamer, cand["title"], transcript,
                              cfg["publish"].get("tags_extra"))
+
+    thumb = OUTPUT_DIR / f"{cid}_thumb.jpg"
+    try:
+        generate_thumbnail(out, thumb, streamer, meta.get("hook", ""))
+    except Exception as e:
+        print(f"    (thumbnail failed: {e})")
+
     (OUTPUT_DIR / f"{cid}.json").write_text(json.dumps({
         "clip_id": cid, "streamer": streamer, "source_views": cand["view_count"],
         "source_url": cand.get("origin_url", ""), **meta,

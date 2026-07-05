@@ -12,5 +12,8 @@ google-api-python-client>=2.100
 google-auth-oauthlib>=1.2
 google-auth-httplib2>=0.2
 
+# Web UI
+Flask>=3.0
+
 # Optional: LLM-generated titles/descriptions/hashtags (falls back to templates if absent)
 anthropic>=0.40

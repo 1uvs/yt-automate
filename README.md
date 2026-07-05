@@ -45,19 +45,33 @@ cp .env.example .env
 3. **(Optional) Better titles** — put an `ANTHROPIC_API_KEY` in `.env`. Without it,
    solid templates are used.
 
-## Daily use
+## Easiest way — the web UI
 
 ```bash
 source .venv/bin/activate
+python app.py        # then open http://localhost:5000
+```
+
+From the browser you can:
+1. **Connect YouTube channel** — one click, authorizes in your browser, shows your
+   channel name + sub count once linked.
+2. **⚡ Generate clips** — runs the whole pipeline with a live log; new clips appear
+   in the review queue with an auto-made **thumbnail**, title, and description.
+3. **Review** — watch each clip, tweak the title/description inline, then **Publish ▶**
+   (or Reject). Publishing pushes the video *and* its thumbnail to your channel.
+
+Everything (streamers, thresholds, layout, caption style, privacy) is tuned in
+`config.yaml`.
+
+## CLI (same thing, no browser)
+
+```bash
 python run.py                 # discover + render new clips into the queue
 python review.py list         # see what's waiting
 python review.py open <id>    # preview a clip in QuickTime
 python review.py approve <id> # publish it to YouTube
 python review.py approve-all  # publish everything pending
 ```
-
-Tune everything (streamers, view thresholds, layout, caption style, privacy) in
-`config.yaml`.
 
 ## Automate (optional)
 
@@ -82,6 +96,12 @@ copyright risk without human review.
 | Download / cut segment | `clipfactory/download.py` | yt-dlp / ffmpeg |
 | Captions (word-level) | `clipfactory/captions.py` | faster-whisper → `.ass` |
 | 9:16 render + burn-in | `clipfactory/edit.py` | ffmpeg |
-| Viral metadata | `clipfactory/metadata.py` | Claude Haiku (optional) |
-| Publish | `clipfactory/youtube.py` | YouTube Data API v3 |
+| Viral metadata + hook | `clipfactory/metadata.py` | Claude Haiku (optional) |
+| Auto thumbnail | `clipfactory/thumbnail.py` | ffmpeg + Pillow |
+| Publish (+ thumbnail) | `clipfactory/youtube.py` | YouTube Data API v3 |
+| Web UI | `app.py` + `templates/` | Flask |
 | Queue / state | `clipfactory/state.py` | SQLite |
+
+> **Custom thumbnails** require a verified YouTube channel. If yours isn't verified
+> yet, the video still publishes fine — YouTube just uses a frame instead of the
+> generated thumbnail (a one-time phone verification at youtube.com/verify fixes it).
