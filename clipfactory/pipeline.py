@@ -136,6 +136,12 @@ def _process(cand: dict, cfg: dict, variant: dict | None = None,
     render_vertical(src, out, specs, layout=layout,
                     w=r["target_w"], h=r["target_h"], max_sec=r["max_final_sec"])
 
+    # Caption PNGs are baked into the mp4 now — drop them so the queue doesn't
+    # accumulate ~100 tiny files per pending clip (not just after publish).
+    if specs:
+        import shutil
+        shutil.rmtree(OUTPUT_DIR / f"{cid}_caps", ignore_errors=True)
+
     meta = generate_metadata(streamer, cand["title"], transcript,
                              cfg["publish"].get("tags_extra"), hashtag_boost=hashtag_boost,
                              title_examples=title_examples)

@@ -69,7 +69,9 @@ def pick_thumbnail_time(video_path: Path, n: int = _N_FRAMES) -> float | None:
         for f in frames:
             content.append({"type": "image_url", "image_url": {"url": _b64(f)}})
 
-        raw = llm.chat_vision_json(content, model=llm.smart_model(), max_tokens=1500)
+        # mini handles frame selection fine and runs on the big (2.5M/day) quota,
+        # keeping the smaller smart-model pool free for the strategy brain.
+        raw = llm.chat_vision_json(content, model=llm.mini_model(), max_tokens=1500)
         if not raw:
             return None
         m = re.search(r"\{.*\}", raw, re.DOTALL)
