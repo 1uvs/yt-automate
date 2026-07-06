@@ -115,6 +115,23 @@ def _process(cand: dict, cfg: dict, variant: dict | None = None,
         specs, transcript = [], ""
         if streamer in (cap_cfg.get("skip_streamers") or []):
             print("    (captions off — this streamer burns their own)")
+
+    # Safety + quality gate — screen with the transcript we already have, BEFORE we
+    # spend a render + upload. High copyright/brand risk (or a clearly weak clip) is
+    # rejected here so it never reaches the channel.
+    sc_cfg = cfg.get("screening") or {}
+    if sc_cfg.get("enabled", True):
+        from .screen import screen_clip
+        sc = screen_clip(streamer, cand["title"], transcript,
+                         min_quality=sc_cfg.get("min_quality", 25),
+                         block_high_risk=sc_cfg.get("block_high_risk", True))
+        if not sc["publish"]:
+            reason = sc["verdict"] or (", ".join(sc["risk_reasons"]) or "screened out")
+            state.upsert(cid, status="rejected",
+                         error=f"screened out ({sc['risk']} risk, q{sc['quality']}): {reason}")
+            print(f"    ⨯ screened out — {sc['risk']} risk / quality {sc['quality']}: {reason}")
+            return
+
     out = OUTPUT_DIR / f"{cid}.mp4"
     render_vertical(src, out, specs, layout=layout,
                     w=r["target_w"], h=r["target_h"], max_sec=r["max_final_sec"])
@@ -123,9 +140,19 @@ def _process(cand: dict, cfg: dict, variant: dict | None = None,
                              cfg["publish"].get("tags_extra"), hashtag_boost=hashtag_boost,
                              title_examples=title_examples)
 
+    # Vision picks the most clickable frame for the thumbnail (falls back to ffmpeg's
+    # representative-frame heuristic if vision is unavailable).
+    frame_at = None
+    if (cfg.get("thumbnail") or {}).get("vision", True):
+        try:
+            from .vision_thumb import pick_thumbnail_time
+            frame_at = pick_thumbnail_time(out)
+        except Exception as e:
+            print(f"    (vision thumbnail pick skipped: {e})")
+
     thumb = OUTPUT_DIR / f"{cid}_thumb.jpg"
     try:
-        generate_thumbnail(out, thumb, streamer, meta.get("hook", ""))
+        generate_thumbnail(out, thumb, streamer, meta.get("hook", ""), frame_at=frame_at)
     except Exception as e:
         print(f"    (thumbnail failed: {e})")
 

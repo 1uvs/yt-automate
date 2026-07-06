@@ -93,6 +93,20 @@ ab_test:
     - name: blur             # blurred bars
       layout: blur_pad
 
+# GPT safety + quality gate: before rendering, each candidate clip is screened for
+# copyright/brand risk (licensed music, TV/movie footage, slurs, sensitive incidents)
+# and viral potential. High-risk or clearly-weak clips are rejected before any render/
+# upload. Fails open (allows the clip) if OpenAI is unavailable. Needs OPENAI_API_KEY.
+screening:
+  enabled: true
+  block_high_risk: true   # reject clips GPT flags as high copyright/brand risk
+  min_quality: 25         # reject clips scoring below this (0-100); 0 = never on quality
+
+# Thumbnails: use GPT-5.4 vision to pick the most clickable frame (visible face, strong
+# emotion, motion clarity) instead of ffmpeg's generic pick. Falls back automatically.
+thumbnail:
+  vision: true
+
 # The "strategy brain": a bigger GPT model reviews your real YouTube analytics once
 # a day (inside autopilot) and rewrites the generation strategy — title formulas,
 # hook style, which streamers to prioritize, which hashtags to push — that new clips

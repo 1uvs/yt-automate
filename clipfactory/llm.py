@@ -68,14 +68,46 @@ def chat_json(prompt: str, model: str | None = None, max_tokens: int = 700) -> s
     elif _param_mode is not None:
         combos.insert(0, combos.pop(combos.index(_param_mode)))
 
+    return _create_json([{"role": "user", "content": prompt}], model, max_tokens)
+
+
+def chat_vision_json(content: list, model: str | None = None,
+                     max_tokens: int = 1500) -> str | None:
+    """Like chat_json but for a multimodal message (text + image_url parts).
+
+    `content` is the OpenAI content array, e.g.
+    [{"type":"text","text":...}, {"type":"image_url","image_url":{"url": "data:..."}}].
+    """
+    if _exhausted:
+        return None
+    if _client() is None:
+        return None
+    return _create_json([{"role": "user", "content": content}],
+                        model or smart_model(), max_tokens)
+
+
+def _create_json(messages: list, model: str, max_tokens: int) -> str | None:
+    """Shared call path: negotiate param combos, back off on quota/rate limits."""
+    global _exhausted, _param_mode
+    client = _client()
+    if client is None:
+        return None
+    combos = [
+        {"response_format": {"type": "json_object"}, "max_completion_tokens": max_tokens},
+        {"max_completion_tokens": max_tokens},
+        {"response_format": {"type": "json_object"}, "max_tokens": max_tokens},
+        {"max_tokens": max_tokens},
+        {},
+    ]
+    if _param_mode is not None and _param_mode not in combos:
+        combos.insert(0, _param_mode)
+    elif _param_mode is not None:
+        combos.insert(0, combos.pop(combos.index(_param_mode)))
+
     last_err = None
     for kw in combos:
         try:
-            resp = client.chat.completions.create(
-                model=model,
-                messages=[{"role": "user", "content": prompt}],
-                **kw,
-            )
+            resp = client.chat.completions.create(model=model, messages=messages, **kw)
             _param_mode = kw
             return resp.choices[0].message.content
         except Exception as e:
@@ -88,8 +120,7 @@ def chat_json(prompt: str, model: str | None = None, max_tokens: int = 700) -> s
                 _exhausted = True
                 print("    (OpenAI rate limit hit — falling back for the rest of this run)")
                 return None
-            # unknown/param error: try the next combo
-            last_err = e
+            last_err = e  # unknown/param error: try the next combo
             continue
     if last_err:
         print(f"    (OpenAI call failed: {str(last_err)[:140]})")

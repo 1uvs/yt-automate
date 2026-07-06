@@ -25,9 +25,9 @@ _SIGNAL_KEYS = ("clips", "total_subs", "by_format", "by_streamer",
                 "by_length", "by_hashtag", "top_titles")
 
 _PROMPT = """You are the growth strategist for a YouTube Shorts channel that reposts \
-Twitch/streamer clips (Kai Cenat, xQc, IShowSpeed, etc.). Your job is to turn real \
-performance data into a concrete generation strategy. The most important metric is \
-subscribers gained, then views, then retention.
+Twitch/streamer clips (Kai Cenat, xQc, IShowSpeed, etc.). Turn real performance data \
+into a generation strategy. Most important metric: subscribers gained, then views, \
+then retention.
 
 REAL analytics from this channel:
 {data}
@@ -35,17 +35,32 @@ REAL analytics from this channel:
 Current strategy (may be empty on the first run):
 {current}
 
-Return an UPDATED strategy as STRICT JSON with these keys:
-- "title_formulas": array of 3-6 concrete title patterns that fit what's converting. \
-Use {{streamer}} as a placeholder, e.g. "{{streamer}} did NOT expect this".
-- "hook_style": one sentence describing the best thumbnail hook phrase style.
-- "priority_streamers": array of streamer names to post more of (best converters first).
-- "boost_hashtags": array of lowercase hashtags (no # symbol) to push.
-- "avoid": array of short things to stop doing (patterns that underperform).
-- "rationale": 1-3 sentences citing the specific numbers you based this on.
+CRITICAL — be statistically honest and AVOID OVERFITTING. This channel likely has \
+very few clips and little/no subscriber signal yet. With thin data, almost any pattern \
+is noise. So:
+- Make INCREMENTAL edits to the current strategy, not a full rewrite. Keep sections \
+that lack strong evidence exactly as they are (list them under "holding").
+- Only change priority_streamers or boost_hashtags when a pattern is backed by \
+AGGREGATED evidence (multiple clips, real subs/views differences) — not one lucky clip.
+- Preserve broad, proven defaults and exploration until sample size is meaningful. \
+Don't collapse onto recent winners.
 
-If the data is too thin to justify a change, keep the prior guidance and say so in \
-"rationale". JSON only, no prose."""
+Return STRICT JSON:
+- "confidence": "low" | "med" | "high" — your confidence given the data volume.
+- "title_formulas": array of 3-6 title patterns (use {{streamer}} placeholder). Keep \
+broad/proven ones when data is thin.
+- "hook_style": one sentence on the best thumbnail hook phrase style.
+- "priority_streamers": array of streamer names to prioritize (only reorder on real \
+evidence; otherwise keep prior order / broad roster).
+- "boost_hashtags": array of lowercase hashtags (no #). Change slowly.
+- "avoid": array of short things to stop doing (only if evidenced).
+- "changes": array of short strings describing what you actually changed this run (empty \
+if nothing changed).
+- "holding": array of short strings naming sections you deliberately left unchanged for \
+lack of evidence.
+- "rationale": 1-3 sentences citing the specific numbers. If data is too thin to justify \
+changes, say so and keep prior guidance.
+JSON only, no prose."""
 
 
 def load_strategy() -> dict:
@@ -97,6 +112,9 @@ def evolve_strategy(verbose: bool = True) -> dict | None:
     STRATEGY_PATH.write_text(json.dumps(strat, indent=2))
     (HISTORY_DIR / f"strategy_{strat['updated']}.json").write_text(json.dumps(strat, indent=2))
     if verbose:
-        print(f"  🧠 strategy updated (from {strat['based_on_clips']} clips): "
-              f"{strat.get('rationale', '')[:140]}")
+        conf = strat.get("confidence", "?")
+        changes = strat.get("changes") or []
+        chg = "; ".join(changes)[:120] if changes else "no changes (holding — data too thin)"
+        print(f"  🧠 strategy updated (from {strat['based_on_clips']} clips, "
+              f"confidence={conf}): {chg}")
     return strat

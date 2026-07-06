@@ -62,11 +62,20 @@ Streamer: {streamer}
 Original clip title: {clip_title}
 Transcript (may be partial): {transcript}
 {examples}{strategy}
-Return STRICT JSON with keys:
-- "title": <=70 chars, punchy, curiosity-driven, includes the streamer's name, NO clickbait lies
-- "description": 1-2 lines + a call to subscribe
+FIRST, ground yourself in the actual clip (do not fabricate — if the transcript is empty \
+or unclear, fall back to the original title and generic hype):
+- payoff: the single most shocking/funny line or moment (quote it if present)
+- emotion: the dominant emotion (rage, shock, joy, disbelief, cringe…)
+- context: the minimum setup a viewer needs, since the clip is out of stream context
+
+THEN write metadata grounded in that payoff — specific, not generic. Return STRICT JSON:
+- "title": <=70 chars, punchy, curiosity-driven, includes the streamer's name, grounded \
+in the real payoff, NO clickbait lies
+- "context": <=12 word one-liner setup (e.g. "after losing a $500 bet")
+- "description": 1-2 lines (lead with the context line) + a call to subscribe
 - "tags": array of 8-12 lowercase search tags (no # symbol)
-- "hook": 2-4 WORD all-caps thumbnail phrase, max 18 chars, high-emotion (e.g. "HE DID WHAT?!")
+- "hook": 2-4 WORD all-caps thumbnail phrase, max 18 chars, high-emotion, matches the \
+payoff (e.g. "HE DID WHAT?!")
 
 JSON only, no prose."""
 
