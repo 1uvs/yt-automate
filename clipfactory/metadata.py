@@ -18,8 +18,14 @@ _gemini_exhausted = False  # once quota is hit in a run, stop retrying (saves ti
 
 
 def _call_llm(prompt: str) -> str | None:
-    """Generate with Gemini if GEMINI_API_KEY is set, else Anthropic. None if neither."""
+    """Generate metadata. Priority: OpenAI GPT-mini -> Gemini -> Anthropic -> None."""
     global _gemini_exhausted
+    # Primary: OpenAI GPT-mini (high daily quota). Falls through on any failure.
+    from . import llm
+    if llm.available():
+        out = llm.chat_json(prompt, model=llm.mini_model())
+        if out:
+            return out
     gkey = env("GEMINI_API_KEY") or env("GOOGLE_API_KEY")
     if gkey and not _gemini_exhausted:
         try:
@@ -55,7 +61,7 @@ maximizes click-through and watch-time for a Gen-Z gaming/entertainment audience
 Streamer: {streamer}
 Original clip title: {clip_title}
 Transcript (may be partial): {transcript}
-{examples}
+{examples}{strategy}
 Return STRICT JSON with keys:
 - "title": <=70 chars, punchy, curiosity-driven, includes the streamer's name, NO clickbait lies
 - "description": 1-2 lines + a call to subscribe
@@ -63,6 +69,30 @@ Return STRICT JSON with keys:
 - "hook": 2-4 WORD all-caps thumbnail phrase, max 18 chars, high-emotion (e.g. "HE DID WHAT?!")
 
 JSON only, no prose."""
+
+
+def _strategy_block() -> str:
+    """Fold the learned, auto-evolving strategy (if any) into the prompt."""
+    try:
+        from .strategy import load_strategy
+        strat = load_strategy()
+    except Exception:
+        strat = {}
+    if not strat:
+        return ""
+    parts = []
+    if strat.get("title_formulas"):
+        formulas = "\n".join(f"- {f}" for f in strat["title_formulas"][:6])
+        parts.append("Proven title formulas (adapt to this clip, don't copy verbatim):\n"
+                     + formulas)
+    if strat.get("hook_style"):
+        parts.append(f"Hook style that converts here: {strat['hook_style']}")
+    if strat.get("avoid"):
+        parts.append("Avoid: " + "; ".join(strat["avoid"][:5]))
+    if not parts:
+        return ""
+    return ("\nLEARNED STRATEGY (auto-derived from THIS channel's analytics — follow it):\n"
+            + "\n".join(parts) + "\n")
 
 
 def _fallback(streamer: str, clip_title: str) -> dict:
@@ -106,6 +136,7 @@ def generate_metadata(streamer: str, clip_title: str, transcript: str = "",
         clip_title=clip_title or "(none)",
         transcript=(transcript or "(no speech)")[:1200],
         examples=examples,
+        strategy=_strategy_block(),
     )
     data = None
     raw = _call_llm(prompt)

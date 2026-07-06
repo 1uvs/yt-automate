@@ -39,4 +39,19 @@ if __name__ == "__main__":
         print("\n  BEST HASHTAGS (auto-boosted on new clips):")
         for h in d["by_hashtag"][:8]:
             print(f"    #{h['tag']:<16} {h['subs_per_clip']} subs/clip · {h['avg_views']} avg views")
+
+    # The evolving strategy (written by the GPT strategy brain, if it's run).
+    from clipfactory.strategy import load_strategy
+    s = load_strategy()
+    if s:
+        print(f"\n🧬 EVOLVING STRATEGY (updated {s.get('updated', '?')}, "
+              f"from {s.get('based_on_clips', '?')} clips):")
+        if s.get("rationale"):
+            print(f"   {s['rationale']}")
+        for f in (s.get("title_formulas") or [])[:5]:
+            print(f"    • title: {f}")
+        if s.get("hook_style"):
+            print(f"    • hook: {s['hook_style']}")
+        if s.get("priority_streamers"):
+            print(f"    • prioritize: {', '.join(s['priority_streamers'][:8])}")
     print()

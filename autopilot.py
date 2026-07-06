@@ -27,6 +27,16 @@ def autopilot() -> None:
     cap = ap.get("max_per_run", 8)
     include_yt = ap.get("include_youtube", False)  # Speed's big VOD download is slow
 
+    # Evolve the generation strategy from yesterday's real analytics before we
+    # generate today's clips (best-effort — needs OpenAI + some published data).
+    if (cfg.get("strategy") or {}).get("enabled", True):
+        print("=== AUTOPILOT: evolving strategy from analytics ===")
+        try:
+            from clipfactory.strategy import evolve_strategy
+            evolve_strategy()
+        except Exception as e:
+            print(f"  (strategy evolve skipped: {e})")
+
     print("=== AUTOPILOT: generating clips ===")
     run(max_clips=cap, skip_youtube=not include_yt)
 

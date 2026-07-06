@@ -15,7 +15,8 @@ google-auth-httplib2>=0.2
 # Web UI
 Flask>=3.0
 
-# Optional: LLM-generated titles/descriptions/hashtags (falls back to templates if absent).
-# Set EITHER a Gemini key OR an Anthropic key.
+# Optional: LLM-generated titles/descriptions/hashtags + the evolving strategy brain
+# (falls back to templates if none are set). Priority: OpenAI -> Gemini -> Anthropic.
+openai>=1.0
 google-genai>=1.0
 anthropic>=0.40
