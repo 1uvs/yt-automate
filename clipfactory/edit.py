@@ -52,9 +52,13 @@ def render_vertical(
         inputs += ["-i", str(spec["path"])]
         label = "[outv]" if i == len(caption_specs) - 1 else f"[v{i}]"
         idx = i + 1  # input stream index (0 is the source)
+        # Half-open window [start, end): a word shows from its start up to (but
+        # not including) the next word's start. Because captions.py tiles windows
+        # so end == the next start, this guarantees exactly one caption per frame
+        # with no blackout gap between words (no doubling, no flicker).
         chain.append(
             f"{prev}[{idx}:v]overlay=0:0:"
-            f"enable='between(t,{spec['start']},{spec['end']})'{label}"
+            f"enable='gte(t,{spec['start']})*lt(t,{spec['end']})'{label}"
         )
         prev = f"[v{i}]"
     if not caption_specs:

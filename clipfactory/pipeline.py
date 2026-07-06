@@ -102,13 +102,19 @@ def _process(cand: dict, cfg: dict, variant: dict | None = None,
 
     cap_cfg = cfg.get("captions") or {}
     want_caps = cap_cfg.get("enabled", True) and streamer not in (cap_cfg.get("skip_streamers") or [])
+    if want_caps and cap_cfg.get("skip_if_burned_in", True):
+        from .burnin import looks_captioned
+        if looks_captioned(src):
+            want_caps = False
+            print("    (captions off — source already has burned-in captions)")
     if want_caps:
         specs, transcript = build_caption_overlays(
             src, OUTPUT_DIR / f"{cid}_caps", res=(r["target_w"], r["target_h"])
         )
     else:
         specs, transcript = [], ""
-        print("    (captions off — this streamer burns their own)")
+        if streamer in (cap_cfg.get("skip_streamers") or []):
+            print("    (captions off — this streamer burns their own)")
     out = OUTPUT_DIR / f"{cid}.mp4"
     render_vertical(src, out, specs, layout=layout,
                     w=r["target_w"], h=r["target_h"], max_sec=r["max_final_sec"])
@@ -170,6 +176,14 @@ def run(limit_streamers: list[str] | None = None, max_clips: int | None = None,
         for rec in ins["recommendations"]:
             print(f"   • {rec}")
         print()
+
+    # Fold in the evolving strategy brain: its boosted hashtags + priority streamers
+    # merge with (and take precedence over) the raw analytics ranking.
+    from .strategy import load_strategy
+    strat = load_strategy()
+    if strat:
+        boost = list(dict.fromkeys([*(strat.get("boost_hashtags") or []), *(boost or [])]))
+        ranking = list(dict.fromkeys([*(strat.get("priority_streamers") or []), *(ranking or [])]))
 
     # Twitch first — these are fast, so clips show up in the queue right away.
     print("🔎 Checking Twitch clips…")

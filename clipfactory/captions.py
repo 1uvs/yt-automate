@@ -99,7 +99,9 @@ def build_caption_overlays(video_path: Path, work_dir: Path, res=(1080, 1920)):
     """
     from faster_whisper import WhisperModel
 
-    model_size = env("WHISPER_MODEL", "base")
+    # 'small' gives noticeably better word splits/timestamps than 'base' (fewer
+    # mangled words like 'sw'/'switch'); override with WHISPER_MODEL if you want.
+    model_size = env("WHISPER_MODEL", "small")
     model = WhisperModel(model_size, device="cpu", compute_type="int8")
     segments, _ = model.transcribe(str(video_path), word_timestamps=True, vad_filter=True)
 
@@ -111,6 +113,26 @@ def build_caption_overlays(video_path: Path, work_dir: Path, res=(1080, 1920)):
                 words.append({"start": float(w.start), "end": float(w.end), "text": t})
     if not words:
         return [], ""
+
+    # Clean the raw word stream: Whisper (esp. with VAD) can emit stutters and
+    # out-of-order / overlapping timestamps. Left unchecked these cause the two
+    # symptoms we're fixing — duplicate ("double") captions and per-word flicker.
+    cleaned = []
+    for w in words:
+        if cleaned:
+            prev = cleaned[-1]
+            # Collapse an immediate repeat of the same word that overlaps the
+            # previous one (a hallucinated stutter) into one longer word.
+            if w["text"].lower() == prev["text"].lower() and w["start"] < prev["end"] + 0.05:
+                prev["end"] = max(prev["end"], w["end"])
+                continue
+            # Force starts to be monotonic so windows never overlap.
+            if w["start"] < prev["end"]:
+                w["start"] = prev["end"]
+        if w["end"] <= w["start"]:
+            w["end"] = w["start"] + 0.08
+        cleaned.append(w)
+    words = cleaned
 
     transcript = " ".join(w["text"] for w in words)
     size = int(res[0] * 0.085)          # ~92px on 1080-wide
@@ -129,16 +151,40 @@ def build_caption_overlays(video_path: Path, work_dir: Path, res=(1080, 1920)):
     # Whisper can emit word times slightly out of order; sort so windows stay monotonic.
     flat.sort(key=lambda x: x["start"])
 
+    # Timing model: each word's overlay stays on screen continuously until the
+    # next word takes over (no blackout frame between words -> no flicker). The
+    # caption only clears during a genuine speech pause. edit.py uses half-open
+    # [start, end) windows so no two overlays are ever live on the same frame.
+    FPS = 30.0                 # must match the render frame rate in edit.py
+    FRAME = 1.0 / FPS
+    HOLD = 0.4                 # linger after the last word of a phrase (seconds)
+    PAUSE_GAP = 0.5            # gap larger than this = clear the caption (a pause)
+
+    # Quantize each word's start to a *strictly increasing* integer frame index.
+    # Words spoken less than one frame apart get nudged a frame apart rather than
+    # collapsing to a zero-length window — this is what guarantees windows never
+    # overlap and never leave a blackout frame (no doubling, no flicker).
+    start_frame = []
+    for item in flat:
+        f = round(item["start"] / FRAME)
+        if start_frame and f <= start_frame[-1]:
+            f = start_frame[-1] + 1
+        start_frame.append(f)
+
     specs = []
     for j, item in enumerate(flat):
-        start = item["start"]
-        # end just before the next word starts (small gap so two captions can never
-        # share even a single frame), and don't linger too long during pauses.
-        next_start = flat[j + 1]["start"] if j + 1 < len(flat) else item["wend"] + 0.3
-        end = min(item["wend"] + 0.4, max(next_start, start)) - 0.03
-        if end <= start:
-            end = start + 0.02
+        s = round(start_frame[j] * FRAME, 3)
+        if j + 1 < len(flat):
+            next_s = start_frame[j + 1]
+            if flat[j + 1]["start"] - item["wend"] <= PAUSE_GAP:
+                e_frame = next_s                                   # seamless hand-off
+            else:
+                e_frame = min(round((item["wend"] + HOLD) / FRAME), next_s)  # linger
+        else:
+            e_frame = round((item["wend"] + HOLD) / FRAME)
+        e_frame = max(e_frame, start_frame[j] + 1)                 # always >= 1 frame
+        e = round(e_frame * FRAME, 3)
         png = work_dir / f"cap_{j:04d}.png"
         _render_word_png(item["tokens"], item["active"], png, size, font, res, stroke_w)
-        specs.append({"path": png, "start": round(start, 3), "end": round(end, 3)})
+        specs.append({"path": png, "start": s, "end": e})
     return specs, transcript

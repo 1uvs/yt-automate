@@ -70,6 +70,8 @@ max_duration_sec: 75         # YouTube Shorts hard limit is 60s of final render;
 # stack two sets of captions on top of each other.
 captions:
   enabled: true
+  skip_if_burned_in: true    # auto-detect clips that already have burned-in captions
+                             # and skip ours (avoids the "double captions" look)
   skip_streamers:
     - jasontheween           # streams with his own burned-in captions
 
@@ -90,6 +92,14 @@ ab_test:
       layout: center_crop
     - name: blur             # blurred bars
       layout: blur_pad
+
+# The "strategy brain": a bigger GPT model reviews your real YouTube analytics once
+# a day (inside autopilot) and rewrites the generation strategy — title formulas,
+# hook style, which streamers to prioritize, which hashtags to push — that new clips
+# are generated toward. Auto-applied; every version saved to data/strategy_history/.
+# Needs OPENAI_API_KEY (with billing) + a few published clips before it has signal.
+strategy:
+  enabled: true
 
 # Fully hands-off mode (autopilot.py): generate + auto-schedule with no review.
 autopilot:
