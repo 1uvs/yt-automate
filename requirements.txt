@@ -7,6 +7,9 @@ python-dotenv>=1.0
 faster-whisper>=1.0
 Pillow>=10.0
 
+# Loudness analysis: highlight detection + picking the best stretch of a long clip
+numpy>=1.24
+
 # YouTube upload
 google-api-python-client>=2.100
 google-auth-oauthlib>=1.2

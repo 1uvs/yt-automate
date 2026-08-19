@@ -45,30 +45,10 @@ def chat_json(prompt: str, model: str | None = None, max_tokens: int = 700) -> s
     The prompt should ask for JSON (json_object response mode requires the word
     'json' to appear in the prompt).
     """
-    global _exhausted, _param_mode
     if _exhausted:
         return None
-    client = _client()
-    if client is None:
-        return None
-    model = model or mini_model()
-
-    # Try param combos in order; remember the first that works. Newer models want
-    # max_completion_tokens (not max_tokens) and reject non-default temperature, so
-    # we don't send temperature at all.
-    combos = [
-        {"response_format": {"type": "json_object"}, "max_completion_tokens": max_tokens},
-        {"max_completion_tokens": max_tokens},
-        {"response_format": {"type": "json_object"}, "max_tokens": max_tokens},
-        {"max_tokens": max_tokens},
-        {},
-    ]
-    if _param_mode is not None and _param_mode not in combos:
-        combos.insert(0, _param_mode)
-    elif _param_mode is not None:
-        combos.insert(0, combos.pop(combos.index(_param_mode)))
-
-    return _create_json([{"role": "user", "content": prompt}], model, max_tokens)
+    return _create_json([{"role": "user", "content": prompt}],
+                        model or mini_model(), max_tokens)
 
 
 def chat_vision_json(content: list, model: str | None = None,
@@ -87,7 +67,12 @@ def chat_vision_json(content: list, model: str | None = None,
 
 
 def _create_json(messages: list, model: str, max_tokens: int) -> str | None:
-    """Shared call path: negotiate param combos, back off on quota/rate limits."""
+    """Shared call path: negotiate param combos, back off on quota/rate limits.
+
+    Newer models want max_completion_tokens (not max_tokens) and reject a non-default
+    temperature, so temperature is never sent and the accepted combo is cached in
+    _param_mode after the first successful call.
+    """
     global _exhausted, _param_mode
     client = _client()
     if client is None:

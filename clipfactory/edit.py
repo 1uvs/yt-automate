@@ -42,9 +42,16 @@ def render_vertical(
     w: int = 1080,
     h: int = 1920,
     max_sec: int = 58,
+    start: float = 0.0,
 ) -> Path:
+    """Render [start, start+max_sec] of `src` as a captioned vertical clip.
+
+    Caption spec times are relative to `start` (the pipeline rebases them with
+    captions.clip_words), so a trimmed render keeps its captions in sync.
+    """
     caption_specs = caption_specs or []
-    inputs = ["-i", str(src)]
+    seek = ["-ss", f"{start:.3f}"] if start > 0 else []
+    inputs = [*seek, "-i", str(src)]
     chain = [_base_chain(layout, w, h)]
 
     prev = "[base]"
@@ -52,12 +59,15 @@ def render_vertical(
         inputs += ["-i", str(spec["path"])]
         label = "[outv]" if i == len(caption_specs) - 1 else f"[v{i}]"
         idx = i + 1  # input stream index (0 is the source)
+        # Overlays are band-height PNGs placed at their own y (see captions.py), so
+        # ffmpeg only composites the strip the text actually occupies.
+        y = int(spec.get("y", 0))
         # Half-open window [start, end): a word shows from its start up to (but
         # not including) the next word's start. Because captions.py tiles windows
         # so end == the next start, this guarantees exactly one caption per frame
         # with no blackout gap between words (no doubling, no flicker).
         chain.append(
-            f"{prev}[{idx}:v]overlay=0:0:"
+            f"{prev}[{idx}:v]overlay=0:{y}:"
             f"enable='gte(t,{spec['start']})*lt(t,{spec['end']})'{label}"
         )
         prev = f"[v{i}]"

@@ -3,6 +3,11 @@
 Produces the 'viral' word-by-word highlight: the whole short phrase is on screen,
 the currently-spoken word is highlighted. Each word gets one PNG, shown during its
 time window; edit.py composites them with ffmpeg's overlay filter.
+
+Transcription and overlay rendering are deliberately separate steps. The pipeline
+needs the transcript early (to screen the clip before spending any render time),
+but only needs the PNGs for clips that actually survive screening — so it calls
+`transcribe()` first and `render_caption_overlays()` later, if at all.
 """
 from __future__ import annotations
 
@@ -21,6 +26,13 @@ WHITE = (255, 255, 255, 255)
 HIGHLIGHT = (255, 222, 0, 255)   # punchy yellow
 STROKE = (0, 0, 0, 255)
 
+CAPTION_CENTER_Y = 0.60          # caption band sits ~lower third
+FPS = 30.0                       # must match the render frame rate in edit.py
+
+# Loading a Whisper model off disk takes several seconds; a run transcribes up to
+# max_per_run clips, so keep the loaded model around instead of paying that each time.
+_model_cache: dict[str, object] = {}
+
 
 def _font(size: int):
     from PIL import ImageFont
@@ -29,6 +41,16 @@ def _font(size: int):
         if Path(p).exists():
             return ImageFont.truetype(p, size)
     return ImageFont.load_default()
+
+
+def _whisper(model_size: str):
+    model = _model_cache.get(model_size)
+    if model is None:
+        from faster_whisper import WhisperModel
+
+        model = WhisperModel(model_size, device="cpu", compute_type="int8")
+        _model_cache[model_size] = model
+    return model
 
 
 def _group_words(words, max_words=3, max_gap=0.6, max_dur=1.5):
@@ -65,44 +87,74 @@ def _wrap(tokens, font, max_w, draw):
     return lines
 
 
-def _render_word_png(tokens, active_idx, out_path, size, font, res, stroke_w):
+def _render_word_png(tokens, active_idx, out_path, size, font, res, stroke_w) -> int:
+    """Draw one caption frame and return the y offset it should be overlaid at.
+
+    Only the caption band is rasterised, not the whole 1080x1920 frame. A phrase
+    occupies a few hundred pixels of height, so a full-frame PNG spends ~85% of its
+    pixels (and of ffmpeg's per-frame compositing work) on transparency. Rendering
+    the band alone and telling edit.py where to place it is the same picture for a
+    fraction of the cost — and there are ~150 of these per clip.
+    """
     from PIL import Image, ImageDraw
 
     W, H = res
-    img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
-    draw = ImageDraw.Draw(img)
-    max_w = int(W * 0.86)
-    lines = _wrap(tokens, font, max_w, draw)
+    probe = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
+    lines = _wrap(tokens, font, int(W * 0.86), probe)
 
     line_h = int(size * 1.15)
-    total_h = line_h * len(lines)
-    y = int(H * 0.60) - total_h // 2   # caption band ~ lower third
+    pad = int(size * 0.45)                      # room for stroke + descenders
+    band_h = min(H, line_h * len(lines) + 2 * pad)
+    y = int(H * CAPTION_CENTER_Y) - band_h // 2
+    y = max(0, min(y, H - band_h))
 
-    idx = 0
+    img = Image.new("RGBA", (W, band_h), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(img)
+
+    ty, idx = pad, 0
     for line in lines:
         line_w = draw.textlength(" ".join(line), font=font)
         x = (W - line_w) // 2
         for tok in line:
             fill = HIGHLIGHT if idx == active_idx else WHITE
-            draw.text((x, y), tok, font=font, fill=fill,
+            draw.text((x, ty), tok, font=font, fill=fill,
                      stroke_width=stroke_w, stroke_fill=STROKE)
             x += draw.textlength(tok + " ", font=font)
             idx += 1
-        y += line_h
+        ty += line_h
     img.save(out_path)
+    return y
 
 
-def build_caption_overlays(video_path: Path, work_dir: Path, res=(1080, 1920)):
-    """Transcribe and render one PNG per word.
+def _clean(words: list[dict]) -> list[dict]:
+    """Collapse stutters and force monotonic, non-overlapping word windows.
 
-    Returns (specs, transcript) where specs = [{path, start, end}, ...] (may be empty).
+    Whisper (especially with VAD) emits repeated words and out-of-order timestamps.
+    Left alone those produce the two classic artefacts: duplicated ("double")
+    captions and per-word flicker.
     """
-    from faster_whisper import WhisperModel
+    cleaned: list[dict] = []
+    for w in words:
+        if cleaned:
+            prev = cleaned[-1]
+            # An immediate repeat of the same word overlapping the previous one is a
+            # hallucinated stutter — merge it into one longer word.
+            if w["text"].lower() == prev["text"].lower() and w["start"] < prev["end"] + 0.05:
+                prev["end"] = max(prev["end"], w["end"])
+                continue
+            if w["start"] < prev["end"]:
+                w["start"] = prev["end"]
+        if w["end"] <= w["start"]:
+            w["end"] = w["start"] + 0.08
+        cleaned.append(w)
+    return cleaned
 
+
+def transcribe(video_path: Path) -> list[dict]:
+    """Transcribe to a cleaned word stream: [{start, end, text}, ...] (may be empty)."""
     # 'small' gives noticeably better word splits/timestamps than 'base' (fewer
     # mangled words like 'sw'/'switch'); override with WHISPER_MODEL if you want.
-    model_size = env("WHISPER_MODEL", "small")
-    model = WhisperModel(model_size, device="cpu", compute_type="int8")
+    model = _whisper(env("WHISPER_MODEL", "small"))
     segments, _ = model.transcribe(str(video_path), word_timestamps=True, vad_filter=True)
 
     words = []
@@ -111,30 +163,40 @@ def build_caption_overlays(video_path: Path, work_dir: Path, res=(1080, 1920)):
             t = w.word.strip()
             if t:
                 words.append({"start": float(w.start), "end": float(w.end), "text": t})
-    if not words:
-        return [], ""
+    return _clean(words)
 
-    # Clean the raw word stream: Whisper (esp. with VAD) can emit stutters and
-    # out-of-order / overlapping timestamps. Left unchecked these cause the two
-    # symptoms we're fixing — duplicate ("double") captions and per-word flicker.
-    cleaned = []
+
+def words_to_text(words: list[dict]) -> str:
+    return " ".join(w["text"] for w in words)
+
+
+def clip_words(words: list[dict], window: tuple[float, float] | None) -> list[dict]:
+    """Restrict words to a (start, end) source window and rebase them to zero.
+
+    Used when the render trims a long source down to its best stretch: the captions
+    have to move with it, or every word lands late by the trim offset.
+    """
+    if not window:
+        return words
+    ws, we = window
+    out = []
     for w in words:
-        if cleaned:
-            prev = cleaned[-1]
-            # Collapse an immediate repeat of the same word that overlaps the
-            # previous one (a hallucinated stutter) into one longer word.
-            if w["text"].lower() == prev["text"].lower() and w["start"] < prev["end"] + 0.05:
-                prev["end"] = max(prev["end"], w["end"])
-                continue
-            # Force starts to be monotonic so windows never overlap.
-            if w["start"] < prev["end"]:
-                w["start"] = prev["end"]
-        if w["end"] <= w["start"]:
-            w["end"] = w["start"] + 0.08
-        cleaned.append(w)
-    words = cleaned
+        if w["end"] <= ws or w["start"] >= we:
+            continue
+        out.append({
+            "start": max(0.0, w["start"] - ws),
+            "end": min(we, w["end"]) - ws,
+            "text": w["text"],
+        })
+    return out
 
-    transcript = " ".join(w["text"] for w in words)
+
+def render_caption_overlays(words: list[dict], work_dir: Path,
+                            res=(1080, 1920)) -> list[dict]:
+    """Render one PNG per word. Returns specs = [{path, start, end, y}, ...]."""
+    if not words:
+        return []
+
     size = int(res[0] * 0.085)          # ~92px on 1080-wide
     stroke_w = max(6, size // 12)
     font = _font(size)
@@ -142,20 +204,18 @@ def build_caption_overlays(video_path: Path, work_dir: Path, res=(1080, 1920)):
 
     # Flatten every word into one ordered list so we can guarantee that no two
     # caption images are ever on screen at the same time (fixes overlapping captions).
-    phrases = _group_words(words)
     flat = []
-    for phrase in phrases:
+    for phrase in _group_words(words):
         tokens = [w["text"] for w in phrase]
         for i, w in enumerate(phrase):
             flat.append({"tokens": tokens, "active": i, "start": w["start"], "wend": w["end"]})
     # Whisper can emit word times slightly out of order; sort so windows stay monotonic.
     flat.sort(key=lambda x: x["start"])
 
-    # Timing model: each word's overlay stays on screen continuously until the
-    # next word takes over (no blackout frame between words -> no flicker). The
-    # caption only clears during a genuine speech pause. edit.py uses half-open
-    # [start, end) windows so no two overlays are ever live on the same frame.
-    FPS = 30.0                 # must match the render frame rate in edit.py
+    # Timing model: each word's overlay stays on screen continuously until the next
+    # word takes over (no blackout frame between words -> no flicker). The caption
+    # only clears during a genuine speech pause. edit.py uses half-open [start, end)
+    # windows so no two overlays are ever live on the same frame.
     FRAME = 1.0 / FPS
     HOLD = 0.4                 # linger after the last word of a phrase (seconds)
     PAUSE_GAP = 0.5            # gap larger than this = clear the caption (a pause)
@@ -164,7 +224,7 @@ def build_caption_overlays(video_path: Path, work_dir: Path, res=(1080, 1920)):
     # Words spoken less than one frame apart get nudged a frame apart rather than
     # collapsing to a zero-length window — this is what guarantees windows never
     # overlap and never leave a blackout frame (no doubling, no flicker).
-    start_frame = []
+    start_frame: list[int] = []
     for item in flat:
         f = round(item["start"] / FRAME)
         if start_frame and f <= start_frame[-1]:
@@ -185,6 +245,16 @@ def build_caption_overlays(video_path: Path, work_dir: Path, res=(1080, 1920)):
         e_frame = max(e_frame, start_frame[j] + 1)                 # always >= 1 frame
         e = round(e_frame * FRAME, 3)
         png = work_dir / f"cap_{j:04d}.png"
-        _render_word_png(item["tokens"], item["active"], png, size, font, res, stroke_w)
-        specs.append({"path": png, "start": s, "end": e})
-    return specs, transcript
+        y = _render_word_png(item["tokens"], item["active"], png, size, font, res, stroke_w)
+        specs.append({"path": png, "start": s, "end": e, "y": y})
+    return specs
+
+
+def build_caption_overlays(video_path: Path, work_dir: Path, res=(1080, 1920)):
+    """Transcribe and render in one call. Returns (specs, transcript).
+
+    Kept for callers that just want captions and don't need the transcript early;
+    the pipeline uses transcribe() + render_caption_overlays() separately.
+    """
+    words = transcribe(video_path)
+    return render_caption_overlays(words, work_dir, res=res), words_to_text(words)

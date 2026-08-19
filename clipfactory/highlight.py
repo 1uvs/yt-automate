@@ -1,7 +1,12 @@
-"""Find the most exciting moments in a long video via audio-loudness peaks.
+"""Find the most exciting moments in a video via audio-loudness peaks.
 
 Streamers like IShowSpeed spike in volume exactly when things go viral
 (screaming / reactions), so loudness peaks are a strong, cheap highlight signal.
+
+Two users of this:
+  * detect_highlights() carves several clips out of a long VOD.
+  * best_window() picks which stretch of an over-long source clip to keep when the
+    render has to trim it to Shorts length.
 """
 from __future__ import annotations
 
@@ -9,6 +14,9 @@ import subprocess
 from pathlib import Path
 
 import numpy as np
+
+HOP = 0.5   # seconds between energy samples
+WIN = 1.0   # seconds averaged per energy sample
 
 
 def _load_audio(path: Path, sr: int = 4000) -> np.ndarray:
@@ -20,6 +28,22 @@ def _load_audio(path: Path, sr: int = 4000) -> np.ndarray:
     if proc.returncode != 0 or not proc.stdout:
         raise RuntimeError(f"could not decode audio from {path}")
     return np.frombuffer(proc.stdout, dtype=np.int16).astype(np.float32)
+
+
+def _energy(audio: np.ndarray, sr: int) -> np.ndarray:
+    """RMS energy per HOP, smoothed. Vectorised — a 90-minute VOD is ~11k windows,
+    which is slow enough to matter as a Python loop and free as a cumulative sum."""
+    hop, win = int(sr * HOP), int(sr * WIN)
+    n_hops = max(1, (len(audio) - win) // hop)
+    # cumulative sum of squares -> every window's mean square in one shot
+    csum = np.concatenate(([0.0], np.cumsum(audio.astype(np.float64) ** 2)))
+    starts = np.arange(n_hops) * hop
+    sums = csum[starts + win] - csum[starts]
+    energy = np.sqrt(sums / win + 1.0).astype(np.float32)
+
+    # smooth so a single spike doesn't win over a sustained hype moment
+    k = 5
+    return np.convolve(energy, np.ones(k) / k, mode="same")
 
 
 def detect_highlights(
@@ -35,20 +59,8 @@ def detect_highlights(
     if duration < clip_len:
         return [(0.0, duration)]
 
-    hop = int(sr * 0.5)
-    win = int(sr * 1.0)
-    n_hops = max(1, (len(audio) - win) // hop)
-    energy = np.empty(n_hops, dtype=np.float32)
-    for i in range(n_hops):
-        seg = audio[i * hop : i * hop + win]
-        energy[i] = np.sqrt(np.mean(seg * seg) + 1.0)
-
-    # smooth so a single spike doesn't win over a sustained hype moment
-    k = 5
-    kernel = np.ones(k) / k
-    energy = np.convolve(energy, kernel, mode="same")
-
-    sep_hops = int(min_separation / 0.5)
+    energy = _energy(audio, sr)
+    sep_hops = int(min_separation / HOP)
     order = np.argsort(energy)[::-1]
     chosen: list[int] = []
     for idx in order:
@@ -59,9 +71,36 @@ def detect_highlights(
 
     segments = []
     for idx in sorted(chosen):
-        center = idx * 0.5
+        center = idx * HOP
         start = max(0.0, center - clip_len * 0.4)   # a little lead-in, then the payoff
         end = min(duration, start + clip_len)
         start = max(0.0, end - clip_len)
         segments.append((round(start, 2), round(end, 2)))
     return segments
+
+
+def best_window(path: Path, length: float, sr: int = 4000) -> tuple[float, float]:
+    """Pick the `length`-second stretch with the most energy in it.
+
+    Twitch clips run up to ~75s but a Short is capped well below that, so something
+    has to go. Taking the first N seconds throws away the payoff, which is usually
+    the loudest part and usually at the end. This keeps the loudest stretch instead,
+    biased slightly early so the punchline isn't sitting on the last frame.
+    """
+    audio = _load_audio(path, sr)
+    duration = len(audio) / sr
+    if duration <= length:
+        return (0.0, duration)
+
+    energy = _energy(audio, sr)
+    win_hops = max(1, int(length / HOP))
+    if win_hops >= len(energy):
+        return (0.0, length)
+
+    csum = np.concatenate(([0.0], np.cumsum(energy.astype(np.float64))))
+    totals = csum[win_hops:] - csum[:-win_hops]
+    start = float(np.argmax(totals) * HOP)
+    # nudge earlier so the loudest beat lands ~70% through rather than at the edge
+    start = max(0.0, start - length * 0.15)
+    start = min(start, duration - length)
+    return (round(start, 2), round(start + length, 2))

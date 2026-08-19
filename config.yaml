@@ -74,13 +74,20 @@ captions:
                              # and skip ours (avoids the "double captions" look)
   skip_streamers:
     - jasontheween           # streams with his own burned-in captions
+  transcribe_when_captions_off: true
+                             # Still transcribe clips whose captions we skip. Costs a
+                             # little time, but the transcript is what the safety
+                             # screener and the title writer read — without it those
+                             # clips get generic titles and a blind screening pass.
 
 # Rendering
 render:
   layout: center_crop        # center_crop = full-screen (recommended) | blur_pad = blurred bars
   target_w: 1080
   target_h: 1920
-  max_final_sec: 58          # trim final vertical clip to stay in Shorts territory
+  max_final_sec: 58          # trim final vertical clip to stay in Shorts territory.
+                             # Sources longer than this are trimmed to their LOUDEST
+                             # stretch (the payoff), not just the first 58 seconds.
   caption_style: karaoke     # karaoke = word-by-word highlight (the "viral" look)
 
 # A/B virality testing: rotate variants across clips, then use YouTube Analytics to
@@ -114,6 +121,14 @@ thumbnail:
 # Needs OPENAI_API_KEY (with billing) + a few published clips before it has signal.
 strategy:
   enabled: true
+
+# Speed knobs. Downloading is network-bound and rendering is CPU-bound, so the
+# pipeline keeps a couple of downloads running ahead of the clip it's working on.
+# Lower these if your connection or Mac struggles; 0 prefetch = fully sequential.
+performance:
+  discovery_workers: 8       # parallel Twitch clip-list lookups during discovery
+  download_workers: 2        # clip downloads in flight at once
+  prefetch_depth: 2          # how many clips ahead to pre-download
 
 # Fully hands-off mode (autopilot.py): generate + auto-schedule with no review.
 autopilot:

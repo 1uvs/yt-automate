@@ -3,8 +3,9 @@
 Auto-generate viral vertical clips from Twitch streamers (Kai Cenat, JasonTheWeen,
 KSI, AMP, …), caption them, and queue them for one-tap publishing to YouTube Shorts.
 
-Pipeline: **Twitch top clips → download → Whisper captions → 9:16 render → viral
-title/desc/hashtags → review queue → publish to YouTube.**
+Pipeline: **Twitch top clips → download → pick the best stretch → transcribe →
+safety/quality screen → captions → 9:16 render → viral title/desc/hashtags →
+review queue → publish to YouTube.**
 
 > ⚠️ **Copyright:** you're re-posting other creators' content. YouTube can issue
 > Content ID claims or copyright strikes (3 strikes = channel terminated). Stick to
@@ -138,21 +139,50 @@ Generate into the review queue on a timer, but still approve/schedule by hand:
 0 */6 * * * cd ~/clip-factory && ./.venv/bin/python run.py >> data/cron.log 2>&1
 ```
 
-## How it works
+## How a clip is processed
+
+The step order is built around one rule: **never pay for work on a clip that won't
+be published.** Rendering is the expensive part, so everything that can reject a
+clip happens before it.
+
+| # | Step | What it does | Why it's here |
+|---|------|--------------|---------------|
+| 1 | **Discover** | Top clips per streamer, best-first | All streamers are queried in parallel; near-duplicate titles (the same moment clipped by five viewers) are dropped |
+| 2 | **Download** | yt-dlp fetches the source | Runs a couple of clips ahead of the cursor, so downloading overlaps with rendering instead of blocking it |
+| 3 | **Pick the stretch** | Loudness picks the best `max_final_sec` window | A 75s source has to lose ~17s. The payoff is usually the loudest moment and usually near the end, so keeping the *first* 58s often cuts the punchline |
+| 4 | **Transcribe** | Whisper word timings | Needed by both the screener and the title writer, so it happens once and both read it |
+| 5 | **Screen** ⛔ | Copyright/brand risk + viral quality | The last cheap step. Rejecting here costs a download; rejecting after step 6 would cost a full render |
+| 6 | **Caption** | One PNG per word | Only clips that survived screening get here |
+| 7 | **Render** | 9:16 crop/blur + caption overlays | ffmpeg |
+| 8 | **Metadata** | Title, description, hashtags, hook | Grounded in the real transcript, steered by the learned strategy |
+| 9 | **Thumbnail** | Vision picks the most clickable frame | Falls back to ffmpeg's heuristic |
+| 10 | **Queue** | Into the review queue (or auto-scheduled) | |
+
+A clip that fails on a transient error (network blip, yt-dlp hiccup) is retried on
+the next run rather than blacklisted — it's given up on after 3 attempts.
+
+## Where the code lives
 
 | Stage | File | Tool |
 |-------|------|------|
 | Discover top clips (Twitch) | `clipfactory/twitch.py` | Twitch Helix API |
 | Discover clips (YouTube/Kick) | `clipfactory/youtube_source.py` | yt-dlp |
-| Highlight detection | `clipfactory/highlight.py` | ffmpeg + numpy (loudness peaks) |
+| Highlight / best-stretch detection | `clipfactory/highlight.py` | ffmpeg + numpy (loudness) |
 | Download / cut segment | `clipfactory/download.py` | yt-dlp / ffmpeg |
-| Captions (word-level) | `clipfactory/captions.py` | faster-whisper → `.ass` |
-| 9:16 render + burn-in | `clipfactory/edit.py` | ffmpeg |
-| Viral metadata + hook | `clipfactory/metadata.py` | Claude Haiku (optional) |
+| Download look-ahead | `clipfactory/prefetch.py` | thread pool |
+| Retry + backoff | `clipfactory/retry.py` | — |
+| Transcribe + captions (word-level) | `clipfactory/captions.py` | faster-whisper → PNG overlays |
+| Burned-in caption detection | `clipfactory/burnin.py` | ffmpeg + numpy |
+| Safety + quality screen | `clipfactory/screen.py` | GPT-mini |
+| 9:16 render + caption burn-in | `clipfactory/edit.py` | ffmpeg |
+| Viral metadata + hook | `clipfactory/metadata.py` | GPT-mini → Gemini → Claude → templates |
 | Hashtag strategy | `clipfactory/hashtags.py` | curated + learned boost |
 | Virality coach (learning) | `clipfactory/analytics.py` | YouTube Analytics API |
-| Auto thumbnail | `clipfactory/thumbnail.py` | ffmpeg + Pillow |
+| Strategy brain (evolves daily) | `clipfactory/strategy.py` | GPT |
+| Auto thumbnail | `clipfactory/thumbnail.py` + `vision_thumb.py` | ffmpeg + Pillow + GPT vision |
 | Publish (+ thumbnail) | `clipfactory/youtube.py` | YouTube Data API v3 |
+| Scheduling / peak slots | `clipfactory/schedule.py` | — |
+| Disk cleanup | `clipfactory/maintenance.py` | — |
 | Web UI | `app.py` + `templates/` | Flask |
 | Queue / state | `clipfactory/state.py` | SQLite |
 
