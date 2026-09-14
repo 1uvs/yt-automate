@@ -8,10 +8,12 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
+from .binaries import FFMPEG, FFPROBE
+
 
 def probe_duration(path) -> float:
     proc = subprocess.run(
-        ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+        [FFPROBE, "-v", "error", "-show_entries", "format=duration",
          "-of", "csv=p=0", str(path)],
         capture_output=True, text=True,
     )
@@ -75,7 +77,7 @@ def render_vertical(
         chain[0] = chain[0].replace("[base]", "[outv]")
 
     cmd = [
-        "ffmpeg", "-y", *inputs,
+        FFMPEG, "-y", *inputs,
         "-t", str(max_sec),
         "-filter_complex", ";".join(chain),
         "-map", "[outv]", "-map", "0:a?",

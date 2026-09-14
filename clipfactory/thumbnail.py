@@ -4,20 +4,21 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
+from .binaries import FFMPEG
 from .captions import HIGHLIGHT, STROKE, WHITE, _font
 
 
 def extract_frame(video_path: Path, out_png: Path, at: float | None = None) -> Path:
     if at is not None:
-        cmd = ["ffmpeg", "-y", "-ss", str(at), "-i", str(video_path),
+        cmd = [FFMPEG, "-y", "-ss", str(at), "-i", str(video_path),
                "-frames:v", "1", str(out_png), "-loglevel", "error"]
     else:  # let ffmpeg pick a representative (high-contrast) frame
-        cmd = ["ffmpeg", "-y", "-i", str(video_path), "-vf", "thumbnail=n=100",
+        cmd = [FFMPEG, "-y", "-i", str(video_path), "-vf", "thumbnail=n=100",
                "-frames:v", "1", str(out_png), "-loglevel", "error"]
     proc = subprocess.run(cmd, capture_output=True, text=True)
     if proc.returncode != 0 or not out_png.exists():
         # fallback: just grab the first frame
-        subprocess.run(["ffmpeg", "-y", "-i", str(video_path), "-frames:v", "1",
+        subprocess.run([FFMPEG, "-y", "-i", str(video_path), "-frames:v", "1",
                         str(out_png), "-loglevel", "error"], check=True)
     return out_png
 

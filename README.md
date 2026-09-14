@@ -105,31 +105,40 @@ volume are genuinely the biggest levers.
 ## Fully hands-off (autopilot)
 
 `autopilot.py` generates new clips **and** auto-schedules them to peak times with no
-review. A daily cron job runs it:
+review. A **launchd agent** runs it daily at 10:00:
 
 ```bash
-crontab -l          # view it
-0 10 * * * cd ~/clip-factory && ./.venv/bin/python autopilot.py >> data/autopilot.log 2>&1
+launchctl print gui/$(id -u)/com.clipfactory.autopilot   # is it loaded? when did it last run?
 ```
+
+The job lives in `~/Library/LaunchAgents/com.clipfactory.autopilot.plist`. It replaced
+the old cron entry for one reason: **cron silently skips a run if the Mac is asleep at
+10:00 and never makes it up.** A laptop that sleeps overnight simply never posts.
+launchd runs a missed job as soon as the Mac wakes, which is what you actually want.
 
 **To pause / stop autopilot:**
 ```bash
-crontab -r          # removes the job entirely
+launchctl bootout gui/$(id -u)/com.clipfactory.autopilot     # stop
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.clipfactory.autopilot.plist   # start again
 ```
-or edit with `crontab -e` and delete the line. Change `0 10` to run at a different
-hour. Cap clips per run with `autopilot.max_per_run` in `config.yaml`.
+Edit `StartCalendarInterval` in the plist to change the hour (bootout + bootstrap to
+apply). Cap clips per run with `autopilot.max_per_run` in `config.yaml`.
 
 **macOS gotchas (important):**
-- Your Mac must be **awake** at the scheduled time — cron won't wake a sleeping Mac.
-- If `data/autopilot.log` stays empty after the run time, grant **Full Disk Access**
-  to `/usr/sbin/cron` (System Settings → Privacy & Security → Full Disk Access).
+- **PATH.** launchd and cron run with a minimal PATH that does *not* include
+  Homebrew's `/opt/homebrew/bin`, so `yt-dlp` and `ffmpeg` are invisible to them.
+  This silently killed every scheduled run between July and September 2026 — the log
+  filled with `No such file or directory: 'yt-dlp'` while manual runs worked fine.
+  `clipfactory/binaries.py` now resolves all three binaries to absolute paths, so
+  this cannot recur regardless of how the pipeline is launched. Override with
+  `YT_DLP_BIN` / `FFMPEG_BIN` / `FFPROBE_BIN` if they live somewhere unusual.
 - OAuth tokens for an **unverified** app expire after ~7 days, so headless posting
   stops until you open the app and click **Connect** again (or verify the app with
   Google). Reconnecting weekly is the simplest fix for personal use.
 
 > ⚠️ Fully automatic means clips post with **no human review** — highest copyright
-> risk. Watch the first few days; if a strike lands, run `crontab -r` and go back to
-> reviewing in the UI.
+> risk. Watch the first few days; if a strike lands, `launchctl bootout` the job and go
+> back to reviewing in the UI.
 
 ## Discovery-only automation (safer)
 

@@ -16,6 +16,8 @@ import subprocess
 import tempfile
 from pathlib import Path
 
+from .binaries import FFMPEG
+
 
 # Tuned on real clips: a frame with burned caption text scores ~0.011 on the
 # outlined-white metric below; raw uncaptioned frames top out around 0.003.
@@ -38,7 +40,7 @@ def _sample_band_frames(video_path: Path, n: int) -> tuple[list[Path], Path]:
     # up into the mid-frame catches faces/bright objects and causes false hits.
     vf = f"fps={fps:.5f},crop=iw*0.8:ih*0.26:iw*0.1:ih*0.72"
     subprocess.run(
-        ["ffmpeg", "-y", "-i", str(video_path), "-vf", vf,
+        [FFMPEG, "-y", "-i", str(video_path), "-vf", vf,
          "-frames:v", str(n), str(tmp / "f_%03d.png")],
         capture_output=True, text=True,
     )

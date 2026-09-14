@@ -9,6 +9,7 @@ import json
 import subprocess
 from pathlib import Path
 
+from .binaries import YTDLP
 from .config import CLIPS_DIR
 from .highlight import detect_highlights
 
@@ -19,7 +20,7 @@ def recent_videos(channel: str, limit: int = 6) -> list[dict]:
     if not url.endswith(("/videos", "/streams")):
         url += "/videos"
     proc = subprocess.run(
-        ["yt-dlp", "-J", "--flat-playlist", "--playlist-end", str(limit), url],
+        [YTDLP, "-J", "--flat-playlist", "--playlist-end", str(limit), url],
         capture_output=True, text=True,
     )
     if proc.returncode != 0:
@@ -46,7 +47,7 @@ def download_video(url: str, video_id: str, max_height: int = 1080) -> Path:
     fmt = (f"bv*[height<={max_height}][ext=mp4]+ba[ext=m4a]/"
            f"b[height<={max_height}][ext=mp4]/b")
     proc = subprocess.run(
-        ["yt-dlp", "-f", fmt, "--merge-output-format", "mp4",
+        [YTDLP, "-f", fmt, "--merge-output-format", "mp4",
          "--no-playlist", "-o", str(dst), url],
         capture_output=True, text=True,
     )

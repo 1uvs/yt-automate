@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.clipfactory.autopilot</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/shayy/clip-factory/.venv/bin/python</string>
+        <string>autopilot.py</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/shayy/clip-factory</string>
+
+    <!-- Unlike cron, launchd runs a missed job as soon as the Mac wakes up. -->
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key><integer>10</integer>
+        <key>Minute</key><integer>0</integer>
+    </dict>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    </dict>
+
+    <key>StandardOutPath</key>
+    <string>/Users/shayy/clip-factory/data/autopilot.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/shayy/clip-factory/data/autopilot.log</string>
+
+    <key>RunAtLoad</key>
+    <false/>
+</dict>
+</plist>

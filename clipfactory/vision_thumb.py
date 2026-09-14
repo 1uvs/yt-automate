@@ -17,6 +17,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
+from .binaries import FFMPEG
 from . import llm
 from .edit import probe_duration
 
@@ -32,7 +33,7 @@ def _sample_frames(video_path: Path, n: int) -> tuple[list[Path], list[float], P
         t = dur * (i + 1) / (n + 1) if dur > 0 else i
         out = tmp / f"f_{i}.jpg"
         subprocess.run(
-            ["ffmpeg", "-y", "-ss", str(round(t, 2)), "-i", str(video_path),
+            [FFMPEG, "-y", "-ss", str(round(t, 2)), "-i", str(video_path),
              "-frames:v", "1", "-vf", "scale=360:-1", str(out), "-loglevel", "error"],
             capture_output=True,
         )

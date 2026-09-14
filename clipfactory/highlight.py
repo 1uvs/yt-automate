@@ -15,13 +15,15 @@ from pathlib import Path
 
 import numpy as np
 
+from .binaries import FFMPEG
+
 HOP = 0.5   # seconds between energy samples
 WIN = 1.0   # seconds averaged per energy sample
 
 
 def _load_audio(path: Path, sr: int = 4000) -> np.ndarray:
     proc = subprocess.run(
-        ["ffmpeg", "-v", "error", "-i", str(path), "-ac", "1", "-ar", str(sr),
+        [FFMPEG, "-v", "error", "-i", str(path), "-ac", "1", "-ar", str(sr),
          "-f", "s16le", "-"],
         capture_output=True,
     )

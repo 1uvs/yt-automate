@@ -4,6 +4,7 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
+from .binaries import FFMPEG, YTDLP
 from .config import CLIPS_DIR
 from .retry import with_retry
 
@@ -22,7 +23,7 @@ def download_clip(clip_url: str, clip_id: str, attempts: int = 3) -> Path:
     if out.exists() and out.stat().st_size > 0:
         return out
     cmd = [
-        "yt-dlp",
+        YTDLP,
         "-f", "mp4/best",
         "--no-playlist",
         "--force-overwrites",
@@ -45,7 +46,7 @@ def cut_segment(source: Path, clip_id: str, start: float, end: float) -> Path:
     if out.exists() and out.stat().st_size > 0:
         return out
     _run([
-        "ffmpeg", "-y", "-ss", str(start), "-i", str(source), "-t", str(end - start),
+        FFMPEG, "-y", "-ss", str(start), "-i", str(source), "-t", str(end - start),
         "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-pix_fmt", "yuv420p",
         "-c:a", "aac", "-b:a", "160k", str(out),
     ], "segment cut")
