@@ -32,6 +32,7 @@ CREATE TABLE IF NOT EXISTS clips (
     youtube_id   TEXT,
     variant      TEXT,               -- A/B variant name (e.g. crop|blur)
     published_at TEXT,               -- when it went live (for analytics windows)
+    category     TEXT,               -- story topic type (unsolved-mystery|history|…)
     error        TEXT,
     created_at   TEXT DEFAULT (datetime('now')),
     updated_at   TEXT DEFAULT (datetime('now'))
@@ -45,6 +46,7 @@ _MIGRATIONS = [
     ("length_sec", "REAL"),
     ("scheduled_at", "TEXT"),
     ("attempts", "INTEGER DEFAULT 0"),
+    ("category", "TEXT"),
 ]
 
 # One connection per thread (sqlite objects aren't shareable across threads), so a

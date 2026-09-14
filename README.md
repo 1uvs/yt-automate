@@ -1,18 +1,54 @@
 # clip-factory
 
-Auto-generate viral vertical clips from Twitch streamers (Kai Cenat, JasonTheWeen,
-KSI, AMP, …), caption them, and queue them for one-tap publishing to YouTube Shorts.
+Auto-generate **original** unsolved-mystery and strange-history YouTube Shorts —
+written, narrated and illustrated in-house — and queue them for publishing.
 
-Pipeline: **Twitch top clips → download → pick the best stretch → transcribe →
-safety/quality screen → captions → 9:16 render → viral title/desc/hashtags →
-review queue → publish to YouTube.**
+Pipeline (story mode, the default): **GPT writes an original script → OpenAI TTS
+narrates it → gpt-image illustrates each beat → Ken Burns motion + crossfades →
+captions → 9:16 render → title/desc/hashtags → review queue → publish to YouTube.**
 
-> ⚠️ **Copyright:** you're re-posting other creators' content. YouTube can issue
-> Content ID claims or copyright strikes (3 strikes = channel terminated). Stick to
-> clip-friendly streamers, keep it transformative (captions/edits help), and review
-> every clip before it publishes. This ships with a **review queue** on purpose.
+The old Twitch-repost pipeline is still here and still works (`autopilot.mode: clips`),
+but it is no longer what the channel runs on. See **[Why story mode](#why-story-mode)**.
 
-## Two kinds of sources
+## Why story mode
+
+Two policies decide whether a faceless Shorts channel survives, and reposting loses
+on both:
+
+- **Copyright.** Reposting streamers means Content ID claims and strikes; three
+  strikes terminates a channel. Original scripts, our own voice and our own images
+  have no third-party rights in them at all.
+- **YouTube's *inauthentic content* policy** (the 2025 rename of "repetitious
+  content"). It demonetises "generic, repetitive, or template-based" output. In a
+  January 2026 sweep, channels holding ~35M subscribers and 4.7B lifetime views were
+  removed from the Partner Program under it. The single most-targeted shape is a
+  scraped story read by a stock voice over stock gameplay.
+
+So the pipeline is built to be the opposite of that shape, deliberately:
+
+| Risk | What this repo does about it |
+| --- | --- |
+| "Generic / template-based" | One **recurring narrator persona** with a point of view and one genuine editorial aside per script (`story.py`) |
+| "Mass-produced" | Every script is **original writing** about a real case, with a covered-topics ledger (`data/used_topics.json`) so nothing repeats |
+| Stock-footage look | **Bespoke images per beat** (`imagery.py`) under continuous Ken Burns motion and crossfades (`kenburns.py`) — no frame is ever static |
+| Stock-TTS sound | **Steerable TTS** — `gpt-4o-mini-tts` takes delivery instructions, not just a voice id (`voice.py`) |
+| Low retention | Hook written to land in **under 2 seconds**, and a **loop**: the closing line hands back to the opening, with the opening image reused on it. Replays count as views, and replay rate is one of the strongest distribution signals |
+| AI personas on sensitive topics | This niche is deliberately **not** health or finance — those are banned outright for AI narration |
+
+Retention bars worth knowing: roughly **65%** average view percentage for a sub-30s
+Short and **50%** for a 30–60s one, below which distribution stops. `story.target_sec`
+defaults to 42s to sit in the easier band while still earning real watch time.
+
+> ⚠️ **Accuracy is the risk that replaces copyright.** The model is told to write only
+> verifiable claims and to flag its own confidence; scripts that self-report
+> `fact_risk: high` are rejected and rewritten. That is a filter, not a guarantee —
+> the review queue exists so you can read a script before it goes out under your name.
+
+## Two kinds of sources (clip mode only)
+
+> These are the inputs for the legacy `autopilot.mode: clips` path. Story mode has no
+> external source — it writes its own material.
+
 
 - **Twitch** (`streamers:` in config) — pulls the already-popular community **Clips**
   via the Helix API. Best signal, lowest effort. Kai Cenat, JasonTheWeen, KSI, AMP…
@@ -148,6 +184,50 @@ Generate into the review queue on a timer, but still approve/schedule by hand:
 0 */6 * * * cd ~/clip-factory && ./.venv/bin/python run.py >> data/cron.log 2>&1
 ```
 
+## How a story is made
+
+```
+story.py        GPT-5.4 writes an original script: hook, 6 beats, loop line,
+                one editorial aside, plus an image prompt per beat.
+                Rejected and rewritten if it repeats a covered topic, overruns
+                the word budget, or the model flags its own facts as high-risk.
+   │
+voice.py        gpt-4o-mini-tts narrates the whole script in one pass, with
+                delivery instructions (not just a voice id).
+   │            The real audio length is what every timing below is built on.
+   │
+imagery.py      gpt-image generates one still per distinct prompt, concurrently.
+                The hook image is reused for the loop line, so it's paid for once.
+   │
+kenburns.py     Each still gets continuous pan/zoom (rotating through 5 motion
+                presets) for a slice of the runtime proportional to how many
+                words that beat speaks. Beats crossfade into each other.
+   │
+captions.py     faster-whisper reads our own narration back to get word-level
+                timestamps, which become the karaoke caption overlays.
+   │
+edit.py         Composites captions onto the base video -> final 9:16 mp4.
+   │
+metadata.py     generate_story_metadata() writes title/description/hashtags for
+                a documentary audience (not the gaming prompt clips use).
+   │
+                -> review queue (pending) -> publish.py / schedule.py
+```
+
+Cost is dominated by images, not tokens. `story.image_model` switches between
+`gpt-image-2.5-flare` (best looking) and `gpt-image-2` (about half the token rate);
+`story.beats` is the other lever, since it sets how many images a story buys.
+
+**The loop is structural, not decorative.** `_segments()` in `story_pipeline.py` puts
+the hook image back on the closing line, so the last frame matches the first. A replay
+counts as a new view, and replay rate is one of the strongest distribution signals on
+Shorts — so the ending is built to hand back to the beginning both visually and in the
+script.
+
+**Why whisper transcribes audio we wrote ourselves:** the script has the words but no
+timings, and captions need to land on the syllable. Reading our own narration back is
+the cheapest way to get word-level timestamps that match the delivery exactly.
+
 ## How a clip is processed
 
 The step order is built around one rule: **never pay for work on a clip that won't
@@ -172,6 +252,20 @@ the next run rather than blacklisted — it's given up on after 3 attempts.
 
 ## Where the code lives
 
+**Story mode** (what the channel runs on):
+
+| Stage | File | Tool |
+|-------|------|------|
+| Write the script | `clipfactory/story.py` | GPT-5.4 (+ covered-topic ledger, stutter guard) |
+| Narrate it | `clipfactory/voice.py` | gpt-4o-mini-tts (steerable delivery) |
+| Illustrate each beat | `clipfactory/imagery.py` | gpt-image-2.5-flare / gpt-image-2 |
+| Motion + crossfades | `clipfactory/kenburns.py` | ffmpeg zoompan + xfade |
+| Orchestration | `clipfactory/story_pipeline.py` | — |
+| Story metadata | `metadata.generate_story_metadata()` | GPT-mini → Gemini → Claude → templates |
+| Binary resolution (cron/launchd safe) | `clipfactory/binaries.py` | — |
+
+**Clip mode** (the original Twitch-repost path, still functional):
+
 | Stage | File | Tool |
 |-------|------|------|
 | Discover top clips (Twitch) | `clipfactory/twitch.py` | Twitch Helix API |
@@ -180,6 +274,11 @@ the next run rather than blacklisted — it's given up on after 3 attempts.
 | Download / cut segment | `clipfactory/download.py` | yt-dlp / ffmpeg |
 | Download look-ahead | `clipfactory/prefetch.py` | thread pool |
 | Retry + backoff | `clipfactory/retry.py` | — |
+
+**Shared by both:**
+
+| Stage | File | Tool |
+|-------|------|------|
 | Transcribe + captions (word-level) | `clipfactory/captions.py` | faster-whisper → PNG overlays |
 | Burned-in caption detection | `clipfactory/burnin.py` | ffmpeg + numpy |
 | Safety + quality screen | `clipfactory/screen.py` | GPT-mini |

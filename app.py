@@ -35,10 +35,18 @@ class _Tee(io.StringIO):
 
 
 def _do_run(streamers):
+    """Generate whatever this channel actually publishes (see autopilot.mode)."""
     RUN.update(running=True, log=[], started_at=time.time())
+    cfg = load_config()
+    mode = ((cfg.get("autopilot") or {}).get("mode") or "clips").lower()
     try:
         with contextlib.redirect_stdout(_Tee()):
-            pipeline_run(limit_streamers=streamers or None)
+            if mode in ("story", "both"):
+                from clipfactory.story_pipeline import run as story_run
+
+                story_run(max_stories=int((cfg.get("story") or {}).get("per_run", 3)))
+            if mode in ("clips", "both"):
+                pipeline_run(limit_streamers=streamers or None)
     except Exception as e:
         RUN["log"].append(f"ERROR: {e}")
     finally:

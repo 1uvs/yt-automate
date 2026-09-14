@@ -72,6 +72,7 @@ def published_with_stats() -> list[dict]:
             "title": p["title"],
             "variant": p.get("variant") or "?",
             "streamer": p.get("streamer") or "?",
+            "category": p.get("category") or "?",
             "length_bucket": _length_bucket(p.get("length_sec")),
             "hashtags": _meta_hashtags(p["clip_id"]),
             "views": int(float(s.get("views", 0) or 0)),
@@ -125,6 +126,7 @@ def insights() -> dict:
     total_subs = sum(r["subs"] for r in rows)
     by_format = _rank(rows, "variant")
     by_streamer = _rank(rows, "streamer")
+    by_category = _rank(rows, "category")
     by_length = _rank(rows, "length_bucket")
     by_hashtag = _rank_hashtags(rows)
 
@@ -162,12 +164,14 @@ def insights() -> dict:
         "total_subs": total_subs,
         "by_format": by_format,
         "by_streamer": by_streamer,
+        "by_category": by_category,
         "by_length": by_length,
         "by_hashtag": by_hashtag,
         "recommendations": recs,
         # fed back into generation (only once there's real subscriber signal):
         "hashtag_boost": [h["tag"] for h in by_hashtag[:3] if h["subs_per_clip"] > 0] if has_signal else [],
         "streamer_ranking": [b["name"] for b in by_streamer if b["subs_per_clip"] > 0],
+        "category_ranking": [b["name"] for b in by_category if b["subs_per_clip"] > 0],
         "best_format": (by_format[0]["name"] if has_signal and by_format
                         and by_format[0]["subs_per_clip"] > 0 else None),
         "top_titles": top_titles,

@@ -90,6 +90,36 @@ render:
                              # stretch (the payoff), not just the first 58 seconds.
   caption_style: karaoke     # karaoke = word-by-word highlight (the "viral" look)
 
+# ─────────────────────────────────────────────────────────────────────────────
+# STORY MODE — the channel's actual content: original unsolved-mystery / history
+# Shorts written, narrated and illustrated here. Nothing is scraped or reposted,
+# which is what keeps this clear of both Content ID and YouTube's 2026
+# "inauthentic content" policy (the one that demonetises template-y AI reposts).
+# ─────────────────────────────────────────────────────────────────────────────
+story:
+  enabled: true
+  niche_desc: >
+    unsolved mysteries, disappearances, strange historical events and unexplained
+    artifacts — real, documented cases told with specific names, dates and places
+  narrator: The Archivist     # the recurring voice; keep this stable, it's the channel's identity
+  voice: onyx                 # OpenAI TTS voice (onyx = low, measured, documentary)
+  voice_instructions:         # blank = use the documentary default in voice.py
+
+  beats: 6                    # images/scenes per story (plus a hook shot reused on the loop)
+  words_per_beat: 13          # measured: the onyx voice reads ~128 wpm, so hook + 6x13
+                              # + loop lands around target_sec. Raise these two together.
+  target_sec: 45              # 30-60s Shorts need ~50% retention vs 65% for sub-30s,
+                              # so sitting just inside the easier band is deliberate
+  max_words: 105              # hard ceiling; the script is rejected and rewritten above this
+  max_final_sec: 58           # Shorts cutoff
+
+  image_model: gpt-image-2.5-flare
+                              # gpt-image-2.5-flare = best looking, ~2x the token rate
+                              # gpt-image-2         = ~half the cost, still good
+                              # (falls back to gpt-image-2 automatically on failure)
+
+  per_run: 3                  # stories generated per autopilot run
+
 # A/B virality testing: rotate variants across clips, then use YouTube Analytics to
 # learn which performs best on YOUR channel. Set enabled: false to always use render.layout.
 ab_test:
@@ -132,9 +162,11 @@ performance:
 
 # Fully hands-off mode (autopilot.py): generate + auto-schedule with no review.
 autopilot:
+  mode: story                # story = generate original Shorts (the channel's niche)
+                             # clips = the old Twitch-repost pipeline
+                             # both  = stories first, then clips
   max_per_run: 8             # safety cap: never schedule more than this per run
-  include_youtube: false     # IShowSpeed's VOD download is slow (~15 min); keep autopilot
-                             # fast + reliable with Twitch only. Use manual Generate for Speed.
+  include_youtube: false     # clips mode only: IShowSpeed's VOD download is slow (~15 min)
 
 # Scheduled posting — approved clips upload as private and auto-go-public at these
 # local times, dripped one per slot so you never dump them all at once.
@@ -153,5 +185,5 @@ publish:
   made_for_kids: false
   tags_extra:
     - shorts
-    - clips
-    - viral
+    - unsolved mystery
+    - strange history

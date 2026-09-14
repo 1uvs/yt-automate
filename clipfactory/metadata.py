@@ -173,3 +173,83 @@ def generate_metadata(streamer: str, clip_title: str, transcript: str = "",
         "hashtags": hashtags,
         "hook": hook,
     }
+
+
+_STORY_PROMPT = """You are a YouTube Shorts growth expert for a channel about \
+unsolved mysteries and strange history. Write metadata for the Short below that \
+maximizes click-through and watch time.
+
+Audience: people who like true unsolved cases, historical oddities and documentary \
+storytelling. They are NOT looking for clickbait — overselling loses them. Specific \
+and strange beats loud and vague.
+
+TITLE: "{title}"
+WHAT THE SHORT SAYS: {narration}
+PAYOFF: {payoff}
+{strategy}
+Return STRICT JSON:
+- "title": under 70 chars. Curiosity-driven and SPECIFIC — name the place, ship, year \
+or object. Never a lie, never all-caps, no "you won't believe".
+- "description": 2-3 sentences that stand on their own, then a line inviting people \
+who like unsolved cases to subscribe.
+- "tags": 8-12 lowercase search tags for this case and the niche.
+- "hook": <= 22 chars for the thumbnail — the strangest concrete noun or number.
+JSON only, no prose."""
+
+
+def _story_fallback(title: str, payoff: str) -> dict:
+    return {
+        "title": title[:70],
+        "description": (payoff or title).strip()
+        + "\n\nSubscribe for a new unsolved case every day.",
+        "tags": ["unsolved mystery", "mystery", "history", "true story",
+                 "unexplained", "documentary", "cold case", "shorts"],
+        "hook": (title.split(":")[0][:22] or "UNSOLVED").upper(),
+    }
+
+
+def generate_story_metadata(story: dict, tags_extra: list[str] | None = None,
+                            hashtag_boost: list[str] | None = None) -> dict:
+    """Title/description/hashtags for a generated story Short.
+
+    Mirrors generate_metadata() but prompts for a documentary audience instead of a
+    gaming one, and seeds from the script rather than a transcript.
+    """
+    tags_extra = tags_extra or []
+    prompt = _STORY_PROMPT.format(
+        title=story.get("title", ""),
+        narration=(story.get("narration") or "")[:1400],
+        payoff=story.get("payoff") or "(none)",
+        strategy=_strategy_block(),
+    )
+    data = None
+    raw = _call_llm(prompt)
+    if raw:
+        m = re.search(r"\{.*\}", raw, re.DOTALL)
+        if m:
+            try:
+                data = json.loads(m.group(0))
+            except json.JSONDecodeError:
+                data = None
+    if not data or "title" not in data:
+        data = _story_fallback(story.get("title", ""), story.get("payoff", ""))
+
+    tags = list(dict.fromkeys([*(data.get("tags") or []), *tags_extra]))
+    topic = (story.get("category") or "mystery").replace("-", "")
+    picks = ["shorts", topic, *[str(t).replace(" ", "") for t in tags[:3]]]
+    seen, tag_out = set(), []
+    for t in [*(hashtag_boost or []), *picks]:
+        t = str(t).lstrip("#").replace(" ", "")
+        if t and t.lower() not in seen:
+            seen.add(t.lower())
+            tag_out.append(t)
+    hashtags = tag_out[:5]
+
+    desc = data.get("description", "").rstrip() + "\n\n" + hashtag_line(hashtags)
+    return {
+        "title": data["title"][:100],
+        "description": desc,
+        "tags": tags[:15],
+        "hashtags": hashtags,
+        "hook": (data.get("hook") or data["title"]).upper()[:22],
+    }

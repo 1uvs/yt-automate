@@ -25,6 +25,7 @@ def autopilot() -> None:
     cfg = load_config()
     ap = cfg.get("autopilot") or {}
     cap = ap.get("max_per_run", 8)
+    mode = (ap.get("mode") or "clips").lower()
     include_yt = ap.get("include_youtube", False)  # Speed's big VOD download is slow
 
     # Evolve the generation strategy from yesterday's real analytics before we
@@ -37,8 +38,17 @@ def autopilot() -> None:
         except Exception as e:
             print(f"  (strategy evolve skipped: {e})")
 
-    print("=== AUTOPILOT: generating clips ===")
-    run(max_clips=cap, skip_youtube=not include_yt)
+    if mode in ("story", "both"):
+        from clipfactory.story_pipeline import run as run_stories
+
+        n = int((cfg.get("story") or {}).get("per_run", 3))
+        print(f"=== AUTOPILOT: writing {n} original story Short(s) ===")
+        made = run_stories(max_stories=min(n, cap))
+        print(f"=== AUTOPILOT: {made} story Short(s) rendered ===")
+
+    if mode in ("clips", "both"):
+        print("=== AUTOPILOT: generating clips ===")
+        run(max_clips=cap, skip_youtube=not include_yt)
 
     pending = state.by_status("pending")[:cap]
     if not pending:

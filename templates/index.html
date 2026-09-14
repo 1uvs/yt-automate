@@ -69,7 +69,7 @@
   <div class="grow"></div>
   <span id="runpill" class="pill" style="display:none"></span>
   <button id="logbtn" class="btn ghost" onclick="toggleLog()">Log</button>
-  <button id="genbtn" class="btn primary" onclick="startRun()">⚡ Generate clips</button>
+  <button id="genbtn" class="btn primary" onclick="startRun()">⚡ Generate {{ 'stories' if (cfg.autopilot.mode or 'clips') in ['story','both'] else 'clips' }}</button>
 </header>
 
 <main>
@@ -116,7 +116,7 @@
         <span class="hint">▶ hover to preview captions</span>
       </div>
       <div class="body">
-        <div class="who">{{ c.streamer }}{% if c.view_count %} · {{ c.view_count }} views{% endif %}{% if c.variant %} · <b style="color:var(--accent)">{{ c.variant }}</b>{% endif %}</div>
+        <div class="who">{{ c.streamer }}{% if c.category %} · {{ c.category }}{% endif %}{% if c.view_count %} · {{ c.view_count }} views{% endif %}{% if c.variant %} · <b style="color:var(--accent)">{{ c.variant }}</b>{% endif %}</div>
         <img class="thumb" src="/media/{{ c.clip_id }}_thumb.jpg" onerror="this.style.display='none'" title="auto-generated thumbnail">
         <input value="{{ c.meta.title|default(c.title) }}" onchange="save('{{ c.clip_id }}')" id="title-{{ c.clip_id }}">
         <textarea onchange="save('{{ c.clip_id }}')" id="desc-{{ c.clip_id }}">{{ c.meta.description|default('') }}</textarea>
@@ -131,7 +131,7 @@
     {% endfor %}
   </div>
   {% else %}
-    <div class="empty">Nothing pending. Hit <b>⚡ Generate clips</b> to pull fresh ones.</div>
+    <div class="empty">Nothing pending. Hit <b>⚡ Generate {{ 'stories' if (cfg.autopilot.mode or 'clips') in ['story','both'] else 'clips' }}</b> to make fresh ones.</div>
   {% endif %}
 
   {% if published %}
