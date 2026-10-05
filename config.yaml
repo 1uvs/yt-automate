@@ -103,9 +103,10 @@ story:
     artifacts — real, documented cases told with specific names, dates and places
   narrator: The Archivist     # the recurring voice; keep this stable, it's the channel's identity
   voice: onyx                 # OpenAI TTS voice (onyx = low, measured, documentary)
-  voice_speed: 1.18           # the default read measured ~140 wpm, which is slow for
-                              # Shorts; this lands nearer 165 wpm. Above ~1.3 it starts
-                              # to sound rushed and clipped.
+  voice_speed: 1.30           # the raw read measures ~140 wpm, which is slow for Shorts.
+                              # 1.18 gave 163 wpm and still felt slow on playback, so
+                              # this targets ~180 wpm. This is about the ceiling — past
+                              # 1.35 the ends of words start clipping.
   voice_instructions:         # blank = use the documentary default in voice.py
 
   beats: 9                    # images/scenes per story (plus a hook shot reused on the loop).
