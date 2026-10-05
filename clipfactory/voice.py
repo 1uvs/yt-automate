@@ -19,11 +19,11 @@ FALLBACK_MODEL = "tts-1-hd"
 
 # Read once per script, so the whole channel keeps one identifiable delivery.
 DEFAULT_INSTRUCTIONS = (
-    "Read as a calm, precise documentary narrator telling a true unsolved case. "
-    "Measured pace, low and level. Land the specific details — names, dates, numbers "
-    "— with a fraction more weight, then move on. Do not sound excited or salesy. "
-    "Let the strange facts do the work. A short natural pause at the end of each "
-    "sentence, never a dramatic gasp."
+    "Read as a documentary narrator telling a true unsolved case, with urgency. "
+    "Brisk and forward-moving — you are holding the attention of someone about to "
+    "scroll away. Low and level, never excited or salesy, but do not dawdle: clip "
+    "the ends of sentences and keep the pauses short. Land the specific details — "
+    "names, dates, numbers — with a fraction more weight, then move straight on."
 )
 
 
@@ -39,27 +39,36 @@ def _client():
 
 
 def narrate(text: str, out: Path, voice: str = "onyx",
-            instructions: str | None = None) -> Path | None:
-    """Render `text` to an mp3 at `out`. Returns None if TTS is unavailable."""
+            instructions: str | None = None, speed: float = 1.0) -> Path | None:
+    """Render `text` to an mp3 at `out`. Returns None if TTS is unavailable.
+
+    `speed` is applied on top of the delivery instructions. The default read came out
+    at ~140 wpm, which is slow for a format where the viewer decides in two seconds;
+    story.voice_speed nudges it without re-recording the prompt.
+    """
     client = _client()
     if client is None:
         return None
     out.parent.mkdir(parents=True, exist_ok=True)
 
-    try:
-        resp = client.audio.speech.create(
-            model=MODEL, voice=voice, input=text,
-            instructions=instructions or DEFAULT_INSTRUCTIONS,
-        )
-        out.write_bytes(resp.content)
-        return out
-    except Exception as e:
-        print(f"    (steerable TTS failed, falling back to {FALLBACK_MODEL}: {str(e)[:120]})")
-
-    try:
-        resp = client.audio.speech.create(model=FALLBACK_MODEL, voice=voice, input=text)
-        out.write_bytes(resp.content)
-        return out
-    except Exception as e:
-        print(f"    (TTS failed: {str(e)[:140]})")
-        return None
+    kw = {"speed": speed} if speed and abs(speed - 1.0) > 0.01 else {}
+    attempts = [
+        (MODEL, {"instructions": instructions or DEFAULT_INSTRUCTIONS, **kw}),
+        # Not every model accepts every parameter; drop the optional ones in turn
+        # rather than losing the narration over a rejected keyword.
+        (MODEL, {"instructions": instructions or DEFAULT_INSTRUCTIONS}),
+        (FALLBACK_MODEL, kw),
+        (FALLBACK_MODEL, {}),
+    ]
+    last = None
+    for model, extra in attempts:
+        try:
+            resp = client.audio.speech.create(model=model, voice=voice, input=text, **extra)
+            out.write_bytes(resp.content)
+            return out
+        except Exception as e:
+            last = e
+            if "spend" in str(e).lower() or "quota" in str(e).lower():
+                break   # retrying a billing wall just wastes time
+    print(f"    (TTS failed: {str(last)[:160]})")
+    return None

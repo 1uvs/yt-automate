@@ -18,10 +18,10 @@ import traceback
 from pathlib import Path
 
 from . import imagery, state, voice
-from .captions import render_caption_overlays, transcribe
+from .captions import align_to_script, render_caption_overlays, transcribe
 from .config import CLIPS_DIR, OUTPUT_DIR
 from .edit import probe_duration, render_vertical
-from .kenburns import apportion, build_base
+from .kenburns import apportion, build_base, split_long_holds
 from .metadata import generate_story_metadata
 from .story import remember_topic, write_story
 from .thumbnail import generate_thumbnail
@@ -79,7 +79,8 @@ def make_story(cfg: dict, hashtag_boost: list[str] | None = None) -> str | None:
     print("  🎙  narrating…")
     audio = voice.narrate(story["narration"], work / "narration.mp3",
                           voice=sc.get("voice", "onyx"),
-                          instructions=sc.get("voice_instructions"))
+                          instructions=sc.get("voice_instructions"),
+                          speed=float(sc.get("voice_speed", 1.0)))
     if not audio:
         raise RuntimeError("TTS produced no narration")
     total = probe_duration(audio)
@@ -108,7 +109,11 @@ def make_story(cfg: dict, hashtag_boost: list[str] | None = None) -> str | None:
 
     # 3. Ken Burns assembly against the real narration length.
     durations = apportion([len(t.split()) for t in texts], total)
-    print("  🎬 rendering motion…")
+    # A beat that speaks for six seconds would otherwise hold one still for six
+    # seconds. Split it so the frame keeps moving without buying another image.
+    images, durations = split_long_holds(images, durations)
+    print(f"  🎬 rendering motion… ({len(durations)} shots, "
+          f"longest hold {max(durations):.1f}s)")
     base = build_base(images, durations, audio, work / "base.mp4",
                       w=r["target_w"], h=r["target_h"])
 
@@ -117,7 +122,10 @@ def make_story(cfg: dict, hashtag_boost: list[str] | None = None) -> str | None:
     specs = []
     if (cfg.get("captions") or {}).get("enabled", True):
         print("  💬 timing captions…")
-        words = transcribe(base)
+        # Whisper supplies the timings; the script supplies the spelling. Without
+        # this, recognition errors on the proper nouns the story is *about* get
+        # burned into the video ("Tamam Shud" came back as "Tamam should").
+        words = align_to_script(transcribe(base), story["narration"])
         if words:
             specs = render_caption_overlays(words, OUTPUT_DIR / f"{sid}_caps",
                                             res=(r["target_w"], r["target_h"]))

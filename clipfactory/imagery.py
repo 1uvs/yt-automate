@@ -15,6 +15,9 @@ previous image rather than taking down the whole render.
 from __future__ import annotations
 
 import base64
+import random
+import re
+import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -46,28 +49,61 @@ def _client():
         return None
 
 
+def _is_rate_limit(e: Exception) -> bool:
+    s = str(e).lower()
+    return "rate limit" in s or "rate_limit" in s or "429" in s
+
+
+def _is_out_of_budget(e: Exception) -> bool:
+    """A billing wall, not a throughput blip — backing off will never clear it."""
+    s = str(e).lower()
+    return "insufficient_quota" in s or "spend limit" in s or "exceeded your current quota" in s
+
+
+def _retry_after(e: Exception, attempt: int) -> float:
+    """Honour the server's suggested wait, else exponential backoff with jitter."""
+    m = re.search(r"try again in ([0-9.]+)s", str(e))
+    if m:
+        return min(60.0, float(m.group(1)) + 0.5)
+    return min(60.0, 4.0 * (2 ** attempt)) + random.uniform(0, 1.5)
+
+
 def _generate_one(client, prompt: str, out: Path,
-                  model: str | None = None) -> Path | None:
+                  model: str | None = None, attempts: int = 4) -> Path | None:
     full = f"{prompt.strip()} {HOUSE_STYLE}"
     # Flare is ~2x gpt-image-2's token rates, so the fallback is also the budget option.
-    chain = [model, FALLBACK_MODEL] if model else [MODEL, FALLBACK_MODEL]
-    for model in dict.fromkeys(chain):
-        try:
-            r = client.images.generate(model=model, prompt=full, size=SIZE)
-            out.write_bytes(base64.b64decode(r.data[0].b64_json))
-            return out
-        except Exception as e:
-            msg = str(e)[:130]
-            # A content-policy refusal won't be fixed by retrying on another model.
-            if "safety" in msg.lower() or "policy" in msg.lower():
-                print(f"    (image refused by safety filter: {msg})")
-                return None
-            print(f"    (image via {model} failed: {msg})")
+    chain = [m for m in dict.fromkeys([model or MODEL, FALLBACK_MODEL]) if m]
+    for name in chain:
+        for i in range(attempts):
+            try:
+                r = client.images.generate(model=name, prompt=full, size=SIZE)
+                out.write_bytes(base64.b64decode(r.data[0].b64_json))
+                return out
+            except Exception as e:
+                msg = str(e)[:130]
+                if _is_out_of_budget(e):
+                    print(f"    (image generation stopped — out of budget: {msg})")
+                    return None
+                # Image tiers are throttled hard (5 images/min on this account), so a
+                # 429 is the expected case under concurrency, not a failure. Waiting
+                # is the fix; falling through to a neighbouring frame would silently
+                # degrade the video for something that resolves in seconds.
+                if _is_rate_limit(e) and i < attempts - 1:
+                    wait = _retry_after(e, i)
+                    print(f"    (image rate-limited, waiting {wait:.0f}s)")
+                    time.sleep(wait)
+                    continue
+                # A content-policy refusal won't be fixed by retrying or by another model.
+                if "safety" in msg.lower() or "policy" in msg.lower():
+                    print(f"    (image refused by safety filter: {msg})")
+                    return None
+                print(f"    (image via {name} failed: {msg})")
+                break
     return None
 
 
 def generate_beat_images(prompts: list[str], work_dir: Path,
-                         workers: int = 4,
+                         workers: int = 2,
                          model: str | None = None) -> list[Path | None]:
     """Generate one image per prompt. Returns a list aligned with `prompts`.
 

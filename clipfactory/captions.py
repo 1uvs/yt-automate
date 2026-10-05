@@ -11,6 +11,9 @@ but only needs the PNGs for clips that actually survive screening — so it call
 """
 from __future__ import annotations
 
+import difflib
+import re
+
 from pathlib import Path
 
 from .config import env
@@ -53,15 +56,47 @@ def _whisper(model_size: str):
     return model
 
 
+# A caption group never runs past one of these — a group that ends mid-clause reads
+# as a mistake, and one that welds the tail of a sentence to the head of the next
+# ("me. Witnesses reported") is actively confusing to skim.
+_HARD_BREAK = (".", "!", "?", ";", ":")
+_SOFT_BREAK = (",", "—", "–")
+# Closing quotes/brackets sit outside the punctuation we care about.
+_TRIM = "\"')”"
+
+
 def _group_words(words, max_words=3, max_gap=0.6, max_dur=1.5):
+    """Group words into caption cards, breaking on sense rather than on a counter.
+
+    Grouping purely by count splits phrases wherever the third word happens to land,
+    so "sleeping pills" ends up straddling two cards. Punctuation is the cheapest
+    available signal for where a phrase actually ends, so a group always closes at a
+    sentence end, and prefers to close at a comma rather than run to the word cap.
+    """
     lines, cur = [], []
+
+    def ends_with(word, marks):
+        return word["text"].rstrip(_TRIM).endswith(marks)
+
     for w in words:
         if not cur:
             cur = [w]
             continue
-        gap = w["start"] - cur[-1]["end"]
+        prev = cur[-1]
+        gap = w["start"] - prev["end"]
         dur = w["end"] - cur[0]["start"]
-        if len(cur) >= max_words or gap > max_gap or dur > max_dur:
+        # Break after a sentence end, after a comma once the group has some weight,
+        # or when the card is simply full / the speaker has paused.
+        # At the word cap, allow one extra word if it closes the phrase — otherwise
+        # a pair like "sleeping pills" gets split by the counter landing between them.
+        full = len(cur) >= max_words
+        if full and len(cur) < max_words + 1 and ends_with(w, _HARD_BREAK + _SOFT_BREAK) \
+                and gap <= max_gap and (w["end"] - cur[0]["start"]) <= max_dur + 0.4:
+            cur.append(w)
+            continue
+        if (ends_with(prev, _HARD_BREAK)
+                or (ends_with(prev, _SOFT_BREAK) and len(cur) >= 2)
+                or full or gap > max_gap or dur > max_dur):
             lines.append(cur)
             cur = [w]
         else:
@@ -258,3 +293,57 @@ def build_caption_overlays(video_path: Path, work_dir: Path, res=(1080, 1920)):
     """
     words = transcribe(video_path)
     return render_caption_overlays(words, work_dir, res=res), words_to_text(words)
+
+
+def align_to_script(words: list[dict], script: str) -> list[dict]:
+    """Keep whisper's timings but restore the words we actually wrote.
+
+    In story mode we are transcribing narration generated from a script we already
+    have, so speech recognition can only lose information. It mishears proper nouns
+    in exactly the places that matter most: "Tamam Shud" came back as "Tamam should",
+    which burned the wrong spelling of the story's key phrase onto the screen.
+
+    Whisper is still the only thing that knows *when* each word is spoken, so we keep
+    its timings and map the real script text onto them. Matched runs take their text
+    from the script; where the two disagree, the script's words for that stretch are
+    spread evenly across the time whisper assigned to it.
+    """
+    script_words = script.split()
+    if not words or not script_words:
+        return words
+
+    def norm(s: str) -> str:
+        return re.sub(r"[^a-z0-9]", "", s.lower())
+
+    heard = [norm(w["text"]) for w in words]
+    real = [norm(w) for w in script_words]
+
+    out: list[dict] = []
+    sm = difflib.SequenceMatcher(None, heard, real, autojunk=False)
+    for tag, i1, i2, j1, j2 in sm.get_opcodes():
+        if tag == "equal":
+            for k in range(i2 - i1):
+                out.append({**words[i1 + k], "text": script_words[j1 + k]})
+            continue
+        if j1 == j2:
+            continue  # whisper invented words that aren't in the script — drop them
+
+        # Time whisper attributed to this stretch. For a pure insertion (i1 == i2)
+        # there is no span, so borrow a beat from the gap at that point.
+        if i2 > i1:
+            start, end = words[i1]["start"], words[i2 - 1]["end"]
+        else:
+            start = words[i1 - 1]["end"] if i1 > 0 else 0.0
+            end = words[i1]["start"] if i1 < len(words) else start + 0.4
+            if end <= start:
+                end = start + 0.4
+
+        n = j2 - j1
+        step = (end - start) / n
+        for k in range(n):
+            out.append({
+                "start": round(start + k * step, 3),
+                "end": round(start + (k + 1) * step, 3),
+                "text": script_words[j1 + k],
+            })
+    return _clean(out)

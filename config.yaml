@@ -103,14 +103,19 @@ story:
     artifacts — real, documented cases told with specific names, dates and places
   narrator: The Archivist     # the recurring voice; keep this stable, it's the channel's identity
   voice: onyx                 # OpenAI TTS voice (onyx = low, measured, documentary)
+  voice_speed: 1.18           # the default read measured ~140 wpm, which is slow for
+                              # Shorts; this lands nearer 165 wpm. Above ~1.3 it starts
+                              # to sound rushed and clipped.
   voice_instructions:         # blank = use the documentary default in voice.py
 
-  beats: 6                    # images/scenes per story (plus a hook shot reused on the loop)
-  words_per_beat: 13          # measured: the onyx voice reads ~128 wpm, so hook + 6x13
-                              # + loop lands around target_sec. Raise these two together.
-  target_sec: 45              # 30-60s Shorts need ~50% retention vs 65% for sub-30s,
+  beats: 9                    # images/scenes per story (plus a hook shot reused on the loop).
+                              # More beats = the picture changes more often. At 6 beats
+                              # each still held ~5.5s, which read as a slideshow.
+  words_per_beat: 9           # short beats cut faster. With voice_speed 1.18 this puts
+                              # a new image on screen roughly every 3 seconds.
+  target_sec: 38              # 30-60s Shorts need ~50% retention vs 65% for sub-30s,
                               # so sitting just inside the easier band is deliberate
-  max_words: 105              # hard ceiling; the script is rejected and rewritten above this
+  max_words: 115              # hard ceiling; the script is rejected and rewritten above this
   max_final_sec: 58           # Shorts cutoff
 
   image_model: gpt-image-2.5-flare

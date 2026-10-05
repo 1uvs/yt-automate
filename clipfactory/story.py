@@ -121,6 +121,17 @@ disputed or unknown, say so in the narration. Do not invent quotes, dates or nam
 that illustrates that beat. Never depict a real identifiable person's face — use \
 environments, objects, documents, landscapes, silhouettes, hands, weather, period \
 detail. No text, captions, logos or watermarks in the image.
+6. VISUAL VARIETY — this matters as much as the writing. Consecutive stills must not \
+look alike. Across the beats, deliberately vary:
+   - SHOT SCALE: alternate extreme close-up (an object filling the frame), medium \
+(a desk, a doorway), and wide (a landscape, a street, a coastline). Never three \
+close-ups of small objects in a row.
+   - SETTING: do not set five beats in the same room. Move between interior and \
+exterior, day and night, indoors and weather.
+   - LIGHT AND COLOUR: vary the dominant tone beat to beat — cold daylight, grey \
+overcast, warm lamplight, deep blue dusk. A story where every frame is a dim amber \
+room reads as one long static image no matter how good each still is.
+   The viewer should be able to tell the picture changed without reading the caption.
 
 Return STRICT JSON:
 - "topic_key": short lowercase slug identifying the case (e.g. "ss-ourang-medan")

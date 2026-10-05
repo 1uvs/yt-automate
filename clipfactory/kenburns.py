@@ -19,8 +19,17 @@ from pathlib import Path
 from .binaries import FFMPEG
 
 FPS = 30
-XFADE = 0.5          # seconds of crossfade between beats
-ZOOM_RANGE = 0.18    # how far a beat travels over its duration
+XFADE = 0.35         # seconds of crossfade between beats
+# How far a beat travels over its duration. At 0.18 across a 5.5s hold this worked
+# out to ~3% per second, which is below the threshold where the eye reads it as
+# movement at all — the first cut looked like a slideshow of stills. The motion is
+# rate-based (see _segment_chain), so raising this makes every beat visibly move
+# regardless of how long it is.
+ZOOM_RANGE = 0.34
+# No single image may hold longer than this. A longer beat is split into two
+# segments with different motion, which lands as a punch-in cut on the same still —
+# visual change without paying for another image.
+MAX_HOLD = 2.6
 
 # (zoom direction, x expression, y expression). `P` is substituted with the beat's
 # linear progress term so pans complete exactly over the beat's own length.
@@ -48,6 +57,29 @@ def apportion(beat_word_counts: list[int], total_sec: float,
                 raw[j] -= deficit
                 raw[i] = min_sec
     return [round(d, 3) for d in raw]
+
+
+def split_long_holds(images: list, durations: list[float],
+                     max_hold: float = MAX_HOLD) -> tuple[list, list[float]]:
+    """Break any over-long beat into repeats of its image, so the frame keeps changing.
+
+    Retention on Shorts dies during dead air, and a still photo held for five seconds
+    is dead air even with a slow zoom on it. Splitting costs nothing: the same file is
+    reused, and the next segment picks up a different motion preset, so the viewer
+    sees a deliberate push-in rather than a stalled frame.
+    """
+    out_imgs, out_durs = [], []
+    for img, dur in zip(images, durations):
+        parts = max(1, int(dur // max_hold) + (1 if dur % max_hold > 0.6 else 0))
+        if parts <= 1:
+            out_imgs.append(img)
+            out_durs.append(dur)
+            continue
+        slice_dur = dur / parts
+        for _ in range(parts):
+            out_imgs.append(img)
+            out_durs.append(round(slice_dur, 3))
+    return out_imgs, out_durs
 
 
 def _segment_chain(idx: int, dur: float, w: int, h: int, label: str) -> str:
