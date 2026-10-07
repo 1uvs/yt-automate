@@ -9,6 +9,7 @@ must already exist — run the app and click Connect once first).
 from __future__ import annotations
 
 from clipfactory import state, youtube
+from clipfactory.analytics import safe_insights
 from clipfactory.config import load_config
 from clipfactory.maintenance import cleanup_disk
 from clipfactory.pipeline import run
@@ -24,6 +25,16 @@ def autopilot() -> None:
 
     cfg = load_config()
     ap = cfg.get("autopilot") or {}
+
+    # Scheduled posts whose time has passed become "published". The clip pipeline
+    # does this itself, so story-only mode never did it — and because the next free
+    # slot is picked as `len(scheduled)` slots out, that count never falling meant
+    # every run scheduled further into the future than the last.
+    from clipfactory.schedule import reconcile_scheduled
+
+    moved = reconcile_scheduled()
+    if moved:
+        print(f"=== AUTOPILOT: {moved} scheduled post(s) are now live ===")
     cap = ap.get("max_per_run", 8)
     mode = (ap.get("mode") or "clips").lower()
     include_yt = ap.get("include_youtube", False)  # Speed's big VOD download is slow
@@ -43,7 +54,11 @@ def autopilot() -> None:
 
         n = int((cfg.get("story") or {}).get("per_run", 3))
         print(f"=== AUTOPILOT: writing {n} original story Short(s) ===")
-        made = run_stories(max_stories=min(n, cap))
+        # Same learned-hashtag boost the clip pipeline applies, so the analytics
+        # loop actually reaches story metadata.
+        ins = safe_insights()
+        made = run_stories(max_stories=min(n, cap),
+                           hashtag_boost=(ins or {}).get("hashtag_boost"))
         print(f"=== AUTOPILOT: {made} story Short(s) rendered ===")
 
     if mode in ("clips", "both"):

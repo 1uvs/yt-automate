@@ -15,7 +15,6 @@ from __future__ import annotations
 import json
 import shutil
 import traceback
-from pathlib import Path
 
 from . import imagery, state, voice
 from .captions import align_to_script, render_caption_overlays, transcribe
@@ -53,7 +52,6 @@ def make_story(cfg: dict, hashtag_boost: list[str] | None = None) -> str | None:
     Returns the clip id, or None if nothing could be produced.
     """
     sc = cfg.get("story") or {}
-    r = cfg["render"]
 
     print("  ✍  writing an original script…")
     story = write_story(cfg)
@@ -70,6 +68,26 @@ def make_story(cfg: dict, hashtag_boost: list[str] | None = None) -> str | None:
     state.upsert(sid, streamer=sc.get("narrator", "The Archivist"),
                  title=story["title"], view_count=0, status="discovered",
                  category=story.get("category"))
+
+    try:
+        return _build(sid, story, cfg, sc, hashtag_boost)
+    except Exception as e:
+        # Without this the row stays "discovered", which state._is_done() counts as
+        # a finished outcome — so seen() would block this topic forever even though
+        # nothing was produced. record_failure marks it retryable instead, exactly
+        # as the clip pipeline does via _safe_process.
+        used = state.record_failure(sid, str(e), streamer=sc.get("narrator"),
+                                    title=story["title"])
+        left = max(0, state.MAX_ATTEMPTS - used)
+        print(f"    x failed after {used} attempt(s)"
+              + (f" — will retry next run ({left} left)" if left else " — giving up on it"))
+        raise
+
+
+def _build(sid: str, story: dict, cfg: dict, sc: dict,
+           hashtag_boost: list[str] | None) -> str:
+    """Narrate, illustrate, render and queue an already-written script."""
+    r = cfg["render"]
 
     texts, prompts = _segments(story)
     work = CLIPS_DIR / sid

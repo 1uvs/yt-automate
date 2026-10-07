@@ -85,7 +85,7 @@ def get_candidates(cfg_entry: dict) -> list[dict]:
     for v in vids:
         print(f"   ⬇ downloading '{v['title'][:45]}' ({round((v['duration'] or 0)/60)} min) — please wait…")
         vod = download_video(v["url"], v["id"], cfg_entry.get("max_height", 1080))
-        print(f"   ✓ downloaded, finding highlights…")
+        print("   ✓ downloaded, finding highlights…")
         segs = detect_highlights(vod, n=per, clip_len=clip_len)
         for k, (start, end) in enumerate(segs):
             candidates.append({

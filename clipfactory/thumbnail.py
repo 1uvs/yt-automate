@@ -24,8 +24,6 @@ def extract_frame(video_path: Path, out_png: Path, at: float | None = None) -> P
 
 
 def _cover(img, w: int, h: int):
-    from PIL import Image
-
     ratio = max(w / img.width, h / img.height)
     resized = img.resize((int(img.width * ratio) + 1, int(img.height * ratio) + 1))
     left = (resized.width - w) // 2
